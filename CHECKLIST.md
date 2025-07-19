@@ -5,10 +5,11 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 ## Quick Stats
 - Total tasks: ~150
 - Estimated time: 6 weeks
-- Current progress: ~55%
+- Current progress: ~60%
 - Last updated: 2025-01-19
 - Test coverage: 42% (37 tests passing)
 - Core functionality: ✅ Text → Task pipeline working
+- Auth flow: ✅ /setup command with token storage working
 
 ## Week 1: Project Setup & Basic Bot Structure
 
@@ -143,7 +144,7 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 - [x] Create command router using aiogram.Router
 - [x] Implement `/start` command:
   - [x] Create welcome message
-  - [ ] Add inline keyboard with "Authorize" button
+  - [x] Add inline keyboard with "Authorize" button
   - [x] Handle user first interaction
 - [x] Implement `/help` command:
   - [x] Create help text with examples
@@ -151,13 +152,13 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [x] Include all available commands
 - [x] Create `src/handlers/__init__.py`:
   - [x] Import all routers
-  - [ ] Create register_handlers function
+  - [x] Create register_handlers function
 - [x] Register handlers in main dispatcher
 - [x] Write tests for commands:
   - [x] Mock telegram types
   - [x] Test command responses
   - [ ] Test keyboard generation
-- [ ] Test bot with BotFather token
+- [x] Test bot with BotFather token
 
 ## Week 2: AI Integration & Docker
 
@@ -279,7 +280,7 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 - [ ] Test full chain integration
 
 ### Day 13: Deepgram Integration
-- [ ] Add Deepgram SDK: `uv add deepgram-sdk==3.10.1`
+- [x] Add Deepgram SDK: `uv add deepgram-sdk==3.10.1`
 - [ ] Create `src/services/deepgram_service.py`:
   - [ ] Initialize Deepgram client
   - [ ] Create transcribe_audio method
@@ -390,8 +391,8 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [ ] Return user info and available projects
 - [x] Update /start command:
   - [x] Check if user has token in DB
-  - [ ] If not, redirect to /setup
-  - [ ] If yes, show main menu
+  - [x] If not, redirect to /setup
+  - [x] If yes, show main menu
 - [x] Create `src/middleware/auth.py`:
   - [x] Check user in database
   - [x] Decrypt token if exists
@@ -403,10 +404,10 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [x] `/cancel` - cancel current operation
   - [ ] `/revoke` - remove token
   - [ ] `/test` - test current token
-- [ ] Test token flow (READY TO TEST):
+- [x] Test token flow (READY TO TEST):
   - [ ] Test token validation with real Todoist API
-  - [ ] Test token storage in database
-  - [ ] Test middleware auth flow
+  - [x] Test token storage in database
+  - [x] Test middleware auth flow
 
 ### Day 19: User Commands
 - [ ] Implement `/settings` command:
@@ -627,6 +628,31 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [ ] Monitoring active
   - [ ] Backups configured
   - [ ] Incident response plan
+
+## Completed Improvements (2025-01-19)
+
+### Fixed Issues
+- [x] PostgreSQL connection error with Docker
+  - [x] Created Makefile for easier Docker management
+  - [x] Fixed DATABASE_URL environment variable conflicts
+  - [x] Added `make run` command with proper env handling
+- [x] Database overflow error for large Telegram IDs
+  - [x] Changed user ID columns from Integer to BigInteger
+  - [x] Updated both User and Task models
+- [x] Authentication flow infinite loop
+  - [x] Fixed AuthMiddleware to allow messages during setup
+  - [x] Added FSM state checking for token processing
+  - [x] Created separate states.py module
+
+### Infrastructure Improvements
+- [x] Created comprehensive Makefile with commands:
+  - [x] `make run` - Run bot with correct DATABASE_URL
+  - [x] `make restart` - Full Docker restart with clean DB
+  - [x] `make logs` - View container logs
+  - [x] `make status` - Check container status
+  - [x] `make test` - Run tests
+  - [x] `make lint` - Run linter
+  - [x] `make typecheck` - Run type checker
 
 ## Additional Features for Agencies
 
