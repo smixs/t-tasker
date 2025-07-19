@@ -17,6 +17,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - taskerbot-network
 
   redis:
     image: redis:7-alpine
@@ -30,6 +32,30 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - taskerbot-network
+
+  bot:
+    build: .
+    container_name: taskerbot-bot
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - taskerbot-network
+
+networks:
+  taskerbot-network:
+    driver: bridge
 
 volumes:
   postgres_data:

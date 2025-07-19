@@ -100,3 +100,22 @@ shell-redis:
 unset-env:
 	@echo "To remove system DATABASE_URL, run:"
 	@echo "unset DATABASE_URL"
+
+# Docker commands
+docker-build:
+	docker compose build
+
+docker-up:
+	docker compose up -d
+
+docker-down:
+	docker compose down
+
+docker-logs:
+	docker compose logs -f bot
+
+docker-shell:
+	docker compose exec bot bash
+
+docker-restart:
+	docker compose restart bot

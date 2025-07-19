@@ -138,3 +138,17 @@ ngrok http 8443              # Expose webhook for Telegram
 
 ## Development Best Practices
 - Если ты в чем-то сомневаешься, всегда используй context7 mcp
+
+## Deepgram Integration Notes
+
+### Nova-3 поддерживает русский язык (2025)
+- Используем `model=nova-3`
+- Для автодетекта: `detect_language=true`
+- НЕ указываем `language` параметр
+- Telegram voice = OGG OPUS формат
+
+### Если пустой транскрипт:
+1. Проверить размер аудио (не 0)
+2. Проверить MIME type: "audio/ogg;codecs=opus"
+3. Включить detect_language=true
+4. Проверить логи Deepgram response

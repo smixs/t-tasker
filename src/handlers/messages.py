@@ -138,7 +138,7 @@ async def handle_voice_message(
         
         # Transcribe with Deepgram
         deepgram = DeepgramService()
-        text = await deepgram.transcribe(audio_bytes, mime_type="audio/ogg")
+        text = await deepgram.transcribe(audio_bytes, mime_type="audio/ogg;codecs=opus")
         
         # Update message with transcribed text
         await processing_msg.edit_text(

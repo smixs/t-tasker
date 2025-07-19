@@ -17,11 +17,11 @@ class DeepgramService:
     def __init__(self) -> None:
         """Initialize Deepgram service."""
         self.settings = get_settings()
-        self.api_key = self.settings.deepgram_api_key
+        self.api_key = self.settings.deepgram_api_key.get_secret_value()
         self.base_url = "https://api.deepgram.com/v1"
         self.timeout = self.settings.deepgram_timeout
 
-    async def transcribe(self, audio_bytes: bytes, mime_type: str = "audio/ogg") -> str:
+    async def transcribe(self, audio_bytes: bytes, mime_type: str = "audio/ogg;codecs=opus") -> str:
         """Transcribe audio bytes to text.
 
         Args:
@@ -40,12 +40,16 @@ class DeepgramService:
         }
 
         params = {
-            "model": "nova-3",  # nova-3 - latest model with auto language detection
+            "model": "nova-3",  # nova-3 is the latest model with Russian support
             "punctuate": True,
             "smart_format": True,
-            # NOT specifying language - let Deepgram auto-detect!
+            "detect_language": True,  # Enable auto-detection for all languages
         }
 
+        # Debug logging
+        logger.info(f"Audio size: {len(audio_bytes)} bytes")
+        logger.debug(f"First 100 bytes: {audio_bytes[:100].hex()}")
+        
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
@@ -61,12 +65,13 @@ class DeepgramService:
                     raise TranscriptionError(f"Deepgram API error: {response.status_code}")
 
                 result = response.json()
+                logger.debug(f"Deepgram response: {result}")
                 
                 # Extract transcript from response
                 transcript = self._extract_transcript(result)
                 
                 if not transcript:
-                    logger.warning("Empty transcript received from Deepgram")
+                    logger.warning(f"Empty transcript received from Deepgram. Response: {result}")
                     raise TranscriptionError("Empty transcript")
 
                 logger.info(f"Successfully transcribed audio, length: {len(transcript)} chars")

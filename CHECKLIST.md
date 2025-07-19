@@ -6,7 +6,7 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 - Total tasks: ~150
 - Estimated time: 6 weeks
 - Current progress: ~70%
-- Last updated: 2025-01-19
+- Last updated: 2025-01-19 (Deepgram & Docker fixes)
 - Test coverage: 84% (51 tests passing + Deepgram tests ready)
 - Core functionality: ✅ Text → Task pipeline working
 - Voice functionality: ✅ Voice → Text → Task pipeline working
@@ -96,6 +96,7 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
     - [ ] `deepgram_api_key_file: Optional[Path]`
     - [x] `deepgram_model: str = "nova-3"`
     - [x] Auto language detection (no language param)
+    - [x] MIME type fixed to "audio/ogg;codecs=opus" for Telegram
   - [x] App settings:
     - [x] `app_env: str = "development"`
     - [x] `app_debug: bool = False`
@@ -227,27 +228,27 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [ ] Test rate limiting
 
 ### Day 9-10: Docker Setup
-- [ ] Create multi-stage Dockerfile:
-  - [ ] Stage 1 - Builder:
-    - [ ] FROM python:3.12-slim as builder
-    - [ ] Install uv
-    - [ ] Copy pyproject.toml and uv.lock
-    - [ ] Install dependencies with uv
-  - [ ] Stage 2 - Runtime:
-    - [ ] FROM python:3.12-slim
-    - [ ] Create appuser (non-root)
-    - [ ] Copy site-packages from builder
-    - [ ] Copy source code
-    - [ ] Set up healthcheck
-    - [ ] Expose ports 8443, 8000
-- [ ] Create docker-compose.yml:
-  - [ ] Define bot service
-  - [ ] Add PostgreSQL service
-  - [ ] Add Redis service
-  - [ ] Configure networks
-  - [ ] Add volume mounts
-  - [ ] Set up env_file
-- [ ] Create .dockerignore
+- [x] Create multi-stage Dockerfile:
+  - [x] Stage 1 - Builder:
+    - [x] FROM python:3.12-slim as builder
+    - [x] Install uv
+    - [x] Copy pyproject.toml and uv.lock
+    - [x] Install dependencies with uv
+  - [x] Stage 2 - Runtime:
+    - [x] FROM python:3.12-slim
+    - [x] Create appuser (non-root)
+    - [x] Copy site-packages from builder
+    - [x] Copy source code
+    - [x] Set up healthcheck
+    - [x] Expose ports 8443, 8000
+- [x] Create docker-compose.yml:
+  - [x] Define bot service
+  - [x] Add PostgreSQL service
+  - [x] Add Redis service
+  - [x] Configure networks
+  - [x] Add volume mounts
+  - [x] Set up env_file
+- [x] Create .dockerignore
 - [ ] Add docker-compose.override.yml for local dev
 - [ ] Test Docker build:
   - [ ] Build image
@@ -633,6 +634,29 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [ ] Incident response plan
 
 ## Completed Improvements (2025-01-19)
+
+### Deepgram Integration Fix
+- [x] Fixed Deepgram empty transcript issue:
+  - [x] Changed model from nova-2 back to nova-3
+  - [x] Removed explicit language parameter for auto-detection
+  - [x] Fixed MIME type to "audio/ogg;codecs=opus" for Telegram voice messages
+  - [x] Added debug logging for audio size and content
+  - [x] Updated CLAUDE.md with Deepgram integration notes
+
+### Docker Setup Completed
+- [x] Created production-ready Dockerfile:
+  - [x] Multi-stage build with uv
+  - [x] Non-root user (appuser)
+  - [x] Health check endpoint
+  - [x] Minimal image size optimization
+- [x] Updated docker-compose.yml:
+  - [x] Added bot service with proper networking
+  - [x] Connected all services to taskerbot-network
+  - [x] Configured health check dependencies
+- [x] Created .dockerignore for clean builds
+- [x] Added Docker commands to Makefile:
+  - [x] docker-build, docker-up, docker-down
+  - [x] docker-logs, docker-shell, docker-restart
 
 ### Fixed Issues
 - [x] PostgreSQL connection error with Docker
