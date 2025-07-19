@@ -251,10 +251,12 @@ class TodoistService:
         return None
 
     def _get_client(self) -> httpx.AsyncClient:
-        """Get or create HTTP client."""
-        if not self._client:
-            self._client = httpx.AsyncClient(timeout=30.0)
-        return self._client
+        """Get or create HTTP client.
+        
+        Note: This returns a new client instance each time to be used as a context manager.
+        The instance client (self._client) is only used when the service itself is used as a context manager.
+        """
+        return httpx.AsyncClient(timeout=30.0)
 
     def _is_cache_valid(self) -> bool:
         """Check if cache is still valid."""

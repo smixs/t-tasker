@@ -6,9 +6,10 @@ from aiogram import Bot, F, Router
 from aiogram.types import Message
 
 from src.core.database import get_database
-from src.core.exceptions import BotError
+from src.core.exceptions import BotError, TranscriptionError
 from src.models.db import User
 from src.repositories.user import UserRepository
+from src.services.deepgram_service import DeepgramService
 from src.services.openai_service import OpenAIService
 from src.services.todoist_service import TodoistService
 from src.utils.formatters import (
@@ -96,19 +97,105 @@ async def handle_text_message(
 
 
 @message_router.message(F.voice)
-async def handle_voice_message(message: Message) -> None:
+async def handle_voice_message(
+    message: Message, 
+    bot: Bot,
+    user: "User",
+    todoist_token: str
+) -> None:
     """Handle voice messages."""
-    if message.voice:
-        logger.info(f"Received voice message: duration={message.voice.duration}s")
+    if not message.voice:
+        return
 
-    # TODO: Download voice file
-    # TODO: Transcribe with Deepgram/Whisper
-    # TODO: Process transcribed text as task
+    user_id = message.from_user.id if message.from_user else 0
+    logger.info(f"Received voice message from {user_id}: duration={message.voice.duration}s")
 
-    await message.answer(
-        "🎤 Получил голосовое сообщение.\n"
-        "Функция распознавания речи скоро будет доступна!"
-    )
+    # Check duration limit (5 minutes)
+    if message.voice.duration > 300:
+        await message.answer(
+            "❌ Голосовое сообщение слишком длинное.\n"
+            "Максимальная длительность: 5 минут."
+        )
+        return
+
+    # Send typing action
+    await bot.send_chat_action(message.chat.id, "typing")
+    
+    # Send processing message
+    processing_msg = await message.answer("🎤 Распознаю голосовое сообщение...")
+
+    try:
+        # Download voice file
+        file = await bot.get_file(message.voice.file_id)
+        if not file.file_path:
+            raise TranscriptionError("No file path in response")
+            
+        audio_io = await bot.download_file(file.file_path)
+        if not audio_io:
+            raise TranscriptionError("Failed to download audio")
+            
+        audio_bytes = audio_io.read()
+        
+        # Transcribe with Deepgram
+        deepgram = DeepgramService()
+        text = await deepgram.transcribe(audio_bytes, mime_type="audio/ogg")
+        
+        # Update message with transcribed text
+        await processing_msg.edit_text(
+            f"📝 Распознано: {text}\n\n"
+            "⏳ Создаю задачу..."
+        )
+        
+        # Process transcribed text through OpenAI
+        openai_service = OpenAIService()
+        task = await openai_service.parse_task(text)
+        
+        # Create task in Todoist
+        async with TodoistService(todoist_token) as todoist:
+            if task.project_name:
+                project = await todoist.get_project_by_name(task.project_name)
+                project_id = project["id"] if project else None
+            else:
+                project_id = None
+            
+            todoist_task = await todoist.create_task(
+                content=task.content,
+                description=task.description,
+                project_id=project_id,
+                labels=task.labels,
+                priority=task.priority or 1,
+                due_string=task.due_string,
+                duration=task.duration,
+            )
+        
+        # Increment task counter
+        db = get_database()
+        async with db.get_session() as session:
+            user_repo = UserRepository(session)
+            await user_repo.increment_tasks_count(user_id)
+        
+        # Delete processing message
+        await processing_msg.delete()
+        
+        # Send success message
+        response = task_to_telegram_html(task, todoist_task)
+        await message.answer(response, parse_mode="HTML")
+        
+    except TranscriptionError as e:
+        logger.warning(f"Transcription error for user {user_id}: {e}")
+        await processing_msg.delete()
+        await message.answer(format_error_message(e))
+    except BotError as e:
+        logger.warning(f"Bot error for user {user_id}: {e}")
+        await processing_msg.delete()
+        await message.answer(format_error_message(e))
+    except Exception as e:
+        logger.error(f"Unexpected error for user {user_id}: {e}", exc_info=True)
+        await processing_msg.delete()
+        await message.answer(
+            "❌ Произошла ошибка при обработке голосового сообщения.\n"
+            "Попробуйте еще раз."
+        )
 
 
 @message_router.message(F.video_note)

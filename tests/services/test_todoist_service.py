@@ -32,11 +32,12 @@ class TestTodoistService:
         """Test successful token validation."""
         mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
+        # json() is a regular method in httpx, not async
+        mock_response.json = MagicMock(return_value={
             "email": "test@example.com",
             "full_name": "Test User",
             "id": "123456",
-        }
+        })
         mock_httpx_client.get = AsyncMock(return_value=mock_response)
         mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
         mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
@@ -79,13 +80,13 @@ class TestTodoistService:
         """Test successful task creation."""
         mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
+        mock_response.json = MagicMock(return_value={
             "id": "2995104339",
             "content": "Test task",
             "description": "Test description",
             "priority": 4,
             "labels": ["test"],
-        }
+        })
         mock_httpx_client.post = AsyncMock(return_value=mock_response)
         mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
         mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
@@ -105,10 +106,13 @@ class TestTodoistService:
 
     async def test_create_task_with_all_params(self, todoist_service, mock_httpx_client):
         """Test task creation with all parameters."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"id": "123", "content": "Task"}
-        mock_httpx_client.post.return_value = mock_response
+        mock_response.json = MagicMock(return_value={"id": "123", "content": "Task"})
+        mock_response.content = b'{"id": "123", "content": "Task"}'  # Add content attribute
+        mock_httpx_client.post = AsyncMock(return_value=mock_response)
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             with patch.object(todoist_service._rate_limiter, "acquire", new_callable=AsyncMock):
@@ -136,10 +140,13 @@ class TestTodoistService:
 
     async def test_create_task_rate_limit(self, todoist_service, mock_httpx_client):
         """Test task creation with rate limit error."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 429
         mock_response.headers = {"Retry-After": "120"}
-        mock_httpx_client.post.return_value = mock_response
+        mock_response.content = b'{"error": "Rate limit exceeded"}'
+        mock_httpx_client.post = AsyncMock(return_value=mock_response)
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             with patch.object(todoist_service._rate_limiter, "acquire", new_callable=AsyncMock):
@@ -150,13 +157,16 @@ class TestTodoistService:
 
     async def test_get_projects_success(self, todoist_service, mock_httpx_client):
         """Test getting projects."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = [
+        mock_response.json = MagicMock(return_value=[
             {"id": "1", "name": "Inbox"},
             {"id": "2", "name": "Work"},
-        ]
-        mock_httpx_client.get.return_value = mock_response
+        ])
+        mock_response.content = b'[{"id": "1", "name": "Inbox"}, {"id": "2", "name": "Work"}]'
+        mock_httpx_client.get = AsyncMock(return_value=mock_response)
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             with patch.object(todoist_service._rate_limiter, "acquire", new_callable=AsyncMock):
@@ -169,10 +179,13 @@ class TestTodoistService:
     async def test_get_projects_cached(self, todoist_service, mock_httpx_client):
         """Test getting projects from cache."""
         # First call - should hit API
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = [{"id": "1", "name": "Inbox"}]
-        mock_httpx_client.get.return_value = mock_response
+        mock_response.json = MagicMock(return_value=[{"id": "1", "name": "Inbox"}])
+        mock_response.content = b'[{"id": "1", "name": "Inbox"}]'
+        mock_httpx_client.get = AsyncMock(return_value=mock_response)
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             with patch.object(todoist_service._rate_limiter, "acquire", new_callable=AsyncMock):
@@ -186,13 +199,16 @@ class TestTodoistService:
 
     async def test_get_project_by_name(self, todoist_service, mock_httpx_client):
         """Test getting project by name."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = [
+        mock_response.json = MagicMock(return_value=[
             {"id": "1", "name": "Inbox"},
             {"id": "2", "name": "Work"},
-        ]
-        mock_httpx_client.get.return_value = mock_response
+        ])
+        mock_response.content = b'[{"id": "1", "name": "Inbox"}, {"id": "2", "name": "Work"}]'
+        mock_httpx_client.get = AsyncMock(return_value=mock_response)
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             with patch.object(todoist_service._rate_limiter, "acquire", new_callable=AsyncMock):
@@ -204,10 +220,13 @@ class TestTodoistService:
 
     async def test_get_project_by_name_not_found(self, todoist_service, mock_httpx_client):
         """Test getting non-existent project by name."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = [{"id": "1", "name": "Inbox"}]
-        mock_httpx_client.get.return_value = mock_response
+        mock_response.json = MagicMock(return_value=[{"id": "1", "name": "Inbox"}])
+        mock_response.content = b'[{"id": "1", "name": "Inbox"}]'
+        mock_httpx_client.get = AsyncMock(return_value=mock_response)
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             with patch.object(todoist_service._rate_limiter, "acquire", new_callable=AsyncMock):
