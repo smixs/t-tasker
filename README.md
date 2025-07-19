@@ -1,4 +1,4 @@
-# 🎯 T-Tasker - Безопасный Telegram-бот для Todoist
+# 🎯 T-Tasker - Telegram-бот для Todoist из текста или голоса
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.12-blue.svg" alt="Python 3.12">
