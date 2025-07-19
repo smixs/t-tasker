@@ -1,992 +1,163 @@
 # TaskerBot Development Checklist
 
-This checklist contains detailed micro-tasks for developing the TaskerBot project. Mark tasks as completed as you progress through development.
+## 📊 Текущий статус
+- **Прогресс**: ~85% завершено
+- **Последнее обновление**: 2025-01-20
+- **Тест покрытие**: 84% (63+ тестов)
+- **Основной функционал**: ✅ Работает
+- **Voice Commands**: ✅ Естественный язык реализован!
 
-## Quick Stats
-- Total tasks: ~150
-- Estimated time: 6 weeks
-- Current progress: ~80% (Callback handlers fixed, auto-delete added!)
-- Last updated: 2025-01-19 (Fixed buttons, added auto-delete feature)
-- Test coverage: 84% (51 tests passing + Deepgram tests ready)
-- Core functionality: ✅ Text → Task pipeline working
-- Voice functionality: ✅ Voice → Text → Task pipeline working
-- Auth flow: ✅ /setup command with token storage working
-- Todoist integration: ✅ Full API client with rate limiting
-- Deepgram integration: ✅ Voice transcription with auto language detection
-- Callback handlers: ✅ All inline keyboard buttons working
-- Auto-delete: ✅ /autodelete command for automatic task cleanup
+## ✅ Что уже работает
 
-## Week 1: Project Setup & Basic Bot Structure
+### Основной функционал
+- **Текстовые сообщения** → OpenAI → Todoist задача
+- **Голосовые сообщения** → Deepgram → OpenAI → Todoist
+- **Естественные команды** (NEW!):
+  - "Покажи задачи на сегодня"
+  - "Удали последнюю задачу" 
+  - "Выполни последнюю задачу"
+  - "Измени приоритет последней на высокий"
+- **Авторизация** через /setup с шифрованием токенов
+- **Кнопки под задачами** (Delete, Complete, Edit)
+- **Команды**: /start, /help, /setup, /undo, /recent, /autodelete
+- **База данных** PostgreSQL с шифрованием
+- **Docker** полностью настроен
+- **Русский язык** полная поддержка
 
-### Day 1-2: Environment & Project Structure
-- [x] Install Python 3.12 if not already installed
-- [x] Install uv package manager: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- [x] Create project directory: `mkdir t-tasker && cd t-tasker`
-- [x] Initialize project with uv: `uv init`
-- [x] Create virtual environment: `uv venv`
-- [x] Create project structure:
-  ```
-  mkdir -p src/{core,handlers,services,models}
-  touch src/__init__.py
-  touch src/{core,handlers,services,models}/__init__.py
-  ```
-- [x] Create base files:
-  ```
-  touch Dockerfile docker-compose.yml .gitignore
-  touch tests/__init__.py
-  ```
-- [x] Initialize git repository: `git init`
-- [x] Create .gitignore with Python template
-- [x] Add core dependencies to pyproject.toml:
-  - [x] `uv add aiogram==3.21.0`
-  - [x] `uv add pydantic==2.10.4`
-  - [x] `uv add pydantic-settings==2.7.0`
-  - [x] `uv add python-dotenv==1.0.1`
-- [x] Add dev dependencies:
-  - [x] `uv add --dev ruff==0.8.6`
-  - [x] `uv add --dev mypy==1.14.1`
-  - [x] `uv add --dev pytest==8.3.4`
-  - [x] `uv add --dev pytest-asyncio==0.25.2`
-  - [x] `uv add --dev pytest-cov==6.0.0`
-- [x] Configure ruff in pyproject.toml:
-  ```toml
-  [tool.ruff]
-  line-length = 120
-  target-version = "py312"
-  select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "ASYNC"]
-  ```
-- [x] Configure mypy in pyproject.toml:
-  ```toml
-  [tool.mypy]
-  python_version = "3.12"
-  strict = true
-  warn_return_any = true
-  warn_unused_configs = true
-  ```
-- [x] Configure pytest in pyproject.toml:
-  ```toml
-  [tool.pytest.ini_options]
-  asyncio_mode = "auto"
-  testpaths = ["tests"]
-  ```
-- [x] Verify setup: `uv run ruff check src/` (should pass on empty files)
-- [x] Verify mypy: `uv run mypy src/` (should pass on empty files)
-- [x] Create initial commit: `git add . && git commit -m "Initial project structure"`
+### Технические детали
+- Intent классификация (TaskCreation | CommandExecution)
+- CommandExecutor для выполнения команд
+- Rate limiting (450 req/15 min)
+- Auto-delete previous task опция
+- Deepgram nova-3 с автоопределением языка
+- Inline keyboards с callback handlers
+- Health check endpoint
+- Makefile для удобного управления
 
-### Day 3: Settings & Configuration
-- [x] Create `src/core/settings.py`
-- [x] Import required modules:
-  - [x] `from pydantic_settings import BaseSettings, SettingsConfigDict`
-  - [x] `from pydantic import Field, field_validator`
-  - [x] `from typing import Optional`
-  - [x] `import os`
-  - [x] `from pathlib import Path`
-- [x] Create Settings class with groups:
-  - [x] Telegram settings:
-    - [x] `telegram_bot_token: str`
-    - [ ] `telegram_bot_token_file: Optional[Path]`
-    - [x] `telegram_webhook_url: str`
-    - [x] `telegram_webhook_secret: str`
-  - [x] OpenAI settings:
-    - [x] `openai_api_key: str`
-    - [ ] `openai_api_key_file: Optional[Path]`
-    - [x] `openai_model: str = "gpt-4o-2024-11-20"`
-    - [x] `openai_max_retries: int = 3`
-    - [x] `openai_timeout: int = 30`
-  - [x] Deepgram settings:
-    - [x] `deepgram_api_key: str`
-    - [ ] `deepgram_api_key_file: Optional[Path]`
-    - [x] `deepgram_model: str = "nova-3"`
-    - [x] Auto language detection (no language param)
-    - [x] MIME type fixed to "audio/ogg;codecs=opus" for Telegram
-  - [x] App settings:
-    - [x] `app_env: str = "development"`
-    - [x] `app_debug: bool = False`
-    - [x] `app_port: int = 8443`
-    - [x] `metrics_port: int = 8000`
-- [ ] Implement file reading for Docker secrets:
-  - [ ] Create `read_secret_file` method
-  - [ ] Add validators for `*_file` fields
-- [x] Add model_config with env prefix and case sensitivity
-- [x] Create settings instance singleton pattern
-- [x] Write tests for Settings class:
-  - [x] Test env var reading
-  - [ ] Test file secret reading
-  - [x] Test validation errors
-  - [x] Test default values
-- [x] Run tests: `uv run pytest tests/core/test_settings.py -v`
+## 🚧 Что осталось сделать
 
-### Day 4: Bot Setup & Webhook
-- [x] Create `src/main.py`
-- [x] Add async main function with proper logging setup
-- [x] Create `src/core/bot.py`:
-  - [x] Initialize Bot instance with settings
-  - [x] Initialize Dispatcher
-  - [x] Create webhook setup function
-  - [x] Create webhook removal function
-- [x] Add aiohttp dependency: `uv add aiohttp==3.11.13`
-- [x] Create `src/core/server.py`:
-  - [x] Create aiohttp.Application
-  - [x] Add webhook endpoint `/webhook/{token}`
-  - [x] Add health check endpoint `/health`
-  - [x] Add metrics placeholder endpoint `/metrics`
-  - [x] Implement proper error handling
-- [x] Create `src/core/middleware.py`:
-  - [x] Create logging middleware
-  - [x] Create error handling middleware
-  - [x] Create request ID middleware
-- [x] Update main.py:
-  - [x] Start web server on configured ports
-  - [x] Setup webhook on startup
-  - [x] Remove webhook on shutdown
-  - [x] Implement graceful shutdown
-- [x] Test webhook locally with ngrok:
-  - [x] Document ngrok setup in README
-  - [x] Test webhook registration
-  - [x] Test health endpoint
+### Критичные задачи (Неделя 1)
+- [ ] **Production настройка**:
+  - [ ] HTTPS webhook URL для Telegram
+  - [ ] SSL сертификат и домен
+  - [ ] Production .env с реальными токенами
+  
+- [ ] **Недостающие функции**:
+  - [ ] Видео заметки (MP4 → аудио → текст)
+  - [ ] Аудио файлы (MP3, WAV)
+  - [ ] Whisper fallback при ошибках Deepgram
+  - [ ] /revoke команда для удаления токена
+  
+- [ ] **UX улучшения**:
+  - [ ] Сообщения об ошибках на русском
+  - [ ] Подтверждение создания с ссылкой на Todoist
+  - [ ] Обновить /help с примерами голосовых команд
+  - [ ] Оптимизировать промпты для Intent классификации
 
-### Day 5: Basic Commands
-- [x] Create `src/handlers/commands.py`
-- [x] Create command router using aiogram.Router
-- [x] Implement `/start` command:
-  - [x] Create welcome message
-  - [x] Add inline keyboard with "Authorize" button
-  - [x] Handle user first interaction
-- [x] Implement `/help` command:
-  - [x] Create help text with examples
-  - [x] Format with Markdown
-  - [x] Include all available commands
-- [x] Create `src/handlers/__init__.py`:
-  - [x] Import all routers
-  - [x] Create register_handlers function
-- [x] Register handlers in main dispatcher
-- [x] Write tests for commands:
-  - [x] Mock telegram types
-  - [x] Test command responses
-  - [ ] Test keyboard generation
-- [x] Test bot with BotFather token
+### Мониторинг и стабильность (Неделя 2)
+- [ ] **Sentry интеграция**:
+  - [ ] Настроить error tracking
+  - [ ] Custom fingerprints для группировки
+  - [ ] Игнорировать известные проблемы
 
-## Week 2: AI Integration & Docker
+- [ ] **Метрики (Prometheus + Grafana)**:
+  - [ ] messages_total, tasks_created_total
+  - [ ] processing_duration histogram
+  - [ ] active_users gauge
+  - [ ] Дашборды для мониторинга
 
-### Day 6-7: OpenAI & Instructor Setup
-- [x] Add OpenAI dependencies:
-  - [ ] `uv add openai==1.59.4`
-  - [x] `uv add instructor==1.7.2`
-- [x] Create `src/services/openai_service.py`:
-  - [x] Initialize OpenAI client with settings
-  - [x] Apply instructor patch
-  - [x] Create parse_task method
-  - [x] Implement retry logic with exponential backoff
-  - [x] Add timeout handling
-- [x] Create `src/models/task.py`:
-  - [x] Define TaskSchema with Pydantic:
-    - [x] `content: str` with validation
-    - [x] `description: Optional[str]`
-    - [x] `due_string: Optional[str]`
-    - [x] `priority: Optional[int]` with Field(ge=1, le=4)
-    - [x] `project_name: Optional[str]`
-    - [x] `labels: Optional[List[str]]`
-    - [x] `recurrence: Optional[str]`
-    - [x] `duration: Optional[int]` (in minutes)
-  - [x] Add field validators
-  - [x] Add model examples
-- [x] Create `src/core/exceptions.py`:
-  - [x] Define base BotError
-  - [x] Define OpenAIError
-  - [x] Define ValidationError
-  - [x] Define RateLimitError
-- [x] Implement profanity filter:
-  - [x] Add better-profanity: `uv add better-profanity==0.7.0`
-  - [x] Create filter function
-  - [x] Apply before OpenAI calls
-- [x] Write comprehensive tests:
-  - [x] Mock OpenAI responses
-  - [x] Test retry logic
-  - [x] Test profanity filter
-  - [x] Test schema validation
+- [ ] **OpenTelemetry**:
+  - [ ] Трейсинг для всех компонентов
+  - [ ] Custom spans для важных операций
+  - [ ] Интеграция с Jaeger
 
-### Day 8: Text Message Handler
-- [x] Create `src/handlers/messages.py`
-- [x] Create message router
-- [x] Implement text message handler:
-  - [x] Filter for text messages only
-  - [x] Call OpenAI service
-  - [x] Handle parsing errors
-  - [x] Send formatted response
-- [x] Create `src/utils/formatters.py`:
-  - [x] Create task_to_telegram_html function
-  - [x] Handle None values properly
-  - [x] Format dates nicely
-  - [x] Add emoji indicators
-- [x] Implement typing action:
-  - [x] Show "typing..." while processing
-  - [x] Handle long operations
-- [x] Add rate limiting per user:
-  - [x] Track message counts in memory
-  - [x] Return rate limit errors
-- [ ] Test end-to-end flow:
-  - [ ] Send various task formats
-  - [ ] Test error messages
-  - [ ] Test rate limiting
+### Оптимизация (Неделя 3)
+- [ ] **Redis кеширование**:
+  - [ ] Проекты и лейблы (5 мин TTL)
+  - [ ] Rate limiting в Redis
+  - [ ] User quotas кеш
 
-### Day 9-10: Docker Setup
-- [x] Create multi-stage Dockerfile:
-  - [x] Stage 1 - Builder:
-    - [x] FROM python:3.12-slim as builder
-    - [x] Install uv
-    - [x] Copy pyproject.toml and uv.lock
-    - [x] Install dependencies with uv
-  - [x] Stage 2 - Runtime:
-    - [x] FROM python:3.12-slim
-    - [x] Create appuser (non-root)
-    - [x] Copy site-packages from builder
-    - [x] Copy source code
-    - [x] Set up healthcheck
-    - [x] Expose ports 8443, 8000
-- [x] Create docker-compose.yml:
-  - [x] Define bot service
-  - [x] Add PostgreSQL service
-  - [x] Add Redis service
-  - [x] Configure networks
-  - [x] Add volume mounts
-  - [x] Set up env_file
-- [x] Create .dockerignore
-- [ ] Add docker-compose.override.yml for local dev
-- [ ] Test Docker build:
-  - [ ] Build image
-  - [ ] Check image size (<120MB)
-  - [ ] Run container
-  - [ ] Test health endpoint
+- [ ] **База данных**:
+  - [ ] Alembic миграции настроить
+  - [ ] Индексы для частых запросов
+  - [ ] Connection pool оптимизация
 
-## Week 3: Voice Processing & Todoist
+- [ ] **Производительность**:
+  - [ ] Load testing (1000 пользователей)
+  - [ ] P95 latency < 4s
+  - [ ] Memory usage < 512MB
 
-### Day 11-12: Chain of Responsibility
-- [ ] Create `src/core/processors.py`:
-  - [ ] Define ProcessorResult enum (Handled, Skip, Error)
-  - [ ] Create abstract MessageProcessor
-  - [ ] Define process method signature
-- [ ] Create `src/processors/command_processor.py`:
-  - [ ] Inherit from MessageProcessor
-  - [ ] Check if message is command
-  - [ ] Return Skip if not command
-- [ ] Create `src/processors/voice_processor.py`:
-  - [ ] Check for voice/video/audio
-  - [ ] Download file if present
-  - [ ] Pass to transcription
-  - [ ] Return transcribed text
-- [ ] Create `src/processors/text_processor.py`:
-  - [ ] Process final text
-  - [ ] Call OpenAI service
-  - [ ] Create task in Todoist
-- [ ] Create processor chain manager:
-  - [ ] Register processors in order
-  - [ ] Execute chain
-  - [ ] Handle errors properly
-- [ ] Write unit tests for each processor
-- [ ] Test full chain integration
+### CI/CD и документация (Неделя 4)
+- [ ] **GitHub Actions**:
+  - [ ] CI pipeline (lint, test, coverage)
+  - [ ] CD pipeline (build, push, deploy)
+  - [ ] Security scanning
 
-### Day 13: Deepgram Integration
-- [x] Add Deepgram SDK: `uv add deepgram-sdk==3.10.1`
-- [x] Create `src/services/deepgram_service.py`:
-  - [x] Initialize Deepgram client (using httpx instead of SDK)
-  - [x] Create transcribe_audio method
-  - [x] Handle different audio formats (via mime_type param)
-  - [x] Add language detection (auto-detection by not specifying language)
-  - [x] Implement timeout handling
-- [ ] Create `src/services/transcription.py`:
-  - [ ] Define abstract transcriber
-  - [ ] Implement Deepgram transcriber
-  - [ ] Add error handling
-- [x] Update voice processor:
-  - [x] Download telegram file
-  - [x] No conversion needed (Deepgram handles OGG)
-  - [x] Call transcription service
-  - [x] Handle errors gracefully
-- [ ] Add ffmpeg to Docker image (for future use)
-- [x] Test with various audio formats:
-  - [x] Voice notes (OGG) - handled by voice_handler
-  - [ ] Video notes (MP4)
-  - [ ] Audio files (MP3, WAV)
-
-### Day 14: Whisper Fallback
-- [ ] Add faster-whisper: `uv add faster-whisper==1.1.0`
-- [ ] Create `src/services/whisper_service.py`:
-  - [ ] Load model on startup
-  - [ ] Implement transcribe method
-  - [ ] Add model caching
-  - [ ] Handle device selection (CPU/CUDA)
-- [ ] Update transcription service:
-  - [ ] Add fallback logic
-  - [ ] Try Deepgram first
-  - [ ] Fall back to Whisper on error
-  - [ ] Log fallback usage
-- [ ] Add model download to Docker:
-  - [ ] Download during build
-  - [ ] Cache in volume
-- [ ] Test fallback scenarios:
-  - [ ] Deepgram API error
-  - [ ] Network timeout
-  - [ ] Invalid API key
-
-### Day 15: Todoist Client
-- [x] Add httpx: `uv add httpx==0.28.1`
-- [x] Create `src/services/todoist_service.py`:
-  - [x] Create async HTTP client
-  - [x] Implement Personal Token validation
-  - [x] Implement create_task method
-  - [x] Add get_projects method
-  - [x] Add get_labels method
-- [x] Create `src/core/rate_limiter.py` (integrated in TodoistService):
-  - [x] Implement token bucket algorithm
-  - [x] 450 requests per 15 minutes (conservative limit)
-  - [x] Per-user tracking
-  - [ ] Add Redis backend later
-- [x] Add Todoist exceptions:
-  - [x] TodoistError
-  - [x] QuotaExceededError
-  - [x] InvalidTokenError
-- [x] Test with mock Todoist API:
-  - [x] Create mock responses
-  - [x] Test rate limiting
-  - [ ] Test error handling (partially done)
-
-## Week 4: Database & User Management
-
-### Day 16-17: Database Setup
-- [x] Add database dependencies:
-  - [x] `uv add asyncpg==0.30.0`
-  - [x] `uv add sqlalchemy==2.0.37`
-  - [x] `uv add alembic==1.14.0`
-- [x] Create `src/models/database.py`:
-  - [x] Define User model:
-    - [x] id: BigInt primary key (using telegram id)
-    - [ ] telegram_user_id: BigInt unique
-    - [x] telegram_username: String optional
-    - [x] todoist_api_token: Text (encrypted)
-    - [x] default_project: String optional
-    - [x] language: String default='ru'
-    - [x] created_at: DateTime
-    - [x] updated_at: DateTime
-    - [ ] is_active: Boolean
-    - [x] task_count: Integer default=0
-  - [x] Create database session manager
-  - [x] Add connection pool config
-- [x] Create `src/services/encryption.py`:
-  - [x] Use cryptography library
-  - [x] Implement encrypt method
-  - [x] Implement decrypt method
-  - [x] Use Fernet symmetric encryption
-- [ ] Set up Alembic:
-  - [ ] Initialize alembic
-  - [ ] Create first migration
-  - [ ] Add migration to startup
-- [x] Create `src/repositories/user.py`:
-  - [x] Create get_by_id
-  - [x] Create create_or_update
-  - [x] Create delete
-  - [x] Add transaction handling
-
-### Day 18: Personal API Token Setup
-- [x] Create `/setup` command handler:
-  - [x] Send instructions with link to Todoist API token page
-  - [x] Include step-by-step guide with screenshots
-  - [x] Wait for user to send token
-- [ ] Create token validation:
-  - [ ] Test token with Todoist API
-  - [ ] Check if token is valid
-  - [ ] Return user info and available projects
-- [x] Update /start command:
-  - [x] Check if user has token in DB
-  - [x] If not, redirect to /setup
-  - [x] If yes, show main menu
-- [x] Create `src/middleware/auth.py`:
-  - [x] Check user in database
-  - [x] Decrypt token if exists
-  - [x] Add to context
-  - [x] Handle unauthorized users
-- [x] Add token management commands:
-  - [x] `/setup` - add/update token
-  - [x] `/status` - check connection status
-  - [x] `/cancel` - cancel current operation
-  - [ ] `/revoke` - remove token
-  - [ ] `/test` - test current token
-- [x] Test token flow (READY TO TEST):
-  - [ ] Test token validation with real Todoist API
-  - [x] Test token storage in database
-  - [x] Test middleware auth flow
-
-### Day 19: User Commands
-- [ ] Implement `/settings` command:
-  - [ ] Show current status
-  - [ ] Add "Revoke access" button
-  - [ ] Add "Change language" option
-  - [ ] Handle button callbacks
-- [ ] Implement `/limits` command:
-  - [ ] Call Todoist Sync API
-  - [ ] Parse quota information
-  - [ ] Format nicely for user
-  - [ ] Cache for 5 minutes
-- [ ] Implement `/usage` command:
-  - [ ] Add task_count to User model
-  - [ ] Increment on each task
-  - [ ] Show daily/weekly/monthly stats
-  - [ ] Add reset functionality
-- [ ] Implement `/delete_my_data`:
-  - [ ] Confirm with user
-  - [ ] Delete from database
-  - [ ] Revoke Todoist token
-  - [ ] Send confirmation
-
-### Day 20: Caching Layer
-- [ ] Add Redis dependency: `uv add redis==5.3.0`
-- [ ] Create `src/core/cache.py`:
-  - [ ] Create Redis connection pool
-  - [ ] Implement get/set methods
-  - [ ] Add TTL support
-  - [ ] Add JSON serialization
-- [ ] Cache Todoist data:
-  - [ ] Projects (5 min TTL)
-  - [ ] Labels (5 min TTL)
-  - [ ] User quotas (5 min TTL)
-- [ ] Add cache warming:
-  - [ ] On user authorization
-  - [ ] On cache miss
-- [ ] Add cache invalidation:
-  - [ ] On project creation
-  - [ ] On settings change
-- [ ] Test caching layer:
-  - [ ] Test TTL expiration
-  - [ ] Test concurrent access
-  - [ ] Test serialization
-
-## Week 5: Monitoring & Error Handling
-
-### Day 21-22: Error Handling
-- [ ] Create `src/handlers/errors.py`:
-  - [ ] Create error router
-  - [ ] Handle BotError types
-  - [ ] Handle unexpected errors
-  - [ ] Send user-friendly messages
-- [ ] Add error types:
-  - [ ] TranscriptionError
-  - [ ] TodoistQuotaError
-  - [ ] OpenAIRateLimitError
-  - [ ] ValidationError
-- [ ] Create error messages:
-  - [ ] Multi-language support
-  - [ ] Helpful suggestions
-  - [ ] Retry instructions
-- [ ] Implement circuit breaker:
-  - [ ] For external services
-  - [ ] Auto-recovery
-  - [ ] Fallback behavior
-- [ ] Test error scenarios:
-  - [ ] Service timeouts
-  - [ ] Invalid inputs
-  - [ ] Rate limits
-
-### Day 23: Sentry Integration
-- [ ] Add Sentry SDK: `uv add sentry-sdk==2.20.0`
-- [ ] Configure Sentry in settings
-- [ ] Initialize in main.py:
-  - [ ] Set environment
-  - [ ] Set release version
-  - [ ] Configure sampling
-- [ ] Add custom context:
-  - [ ] User ID
-  - [ ] Message type
-  - [ ] Processing time
-- [ ] Create custom fingerprints:
-  - [ ] Group similar errors
-  - [ ] Ignore known issues
-- [ ] Test Sentry integration:
-  - [ ] Trigger test error
-  - [ ] Check dashboard
-  - [ ] Verify grouping
-
-### Day 24: OpenTelemetry
-- [ ] Add OTEL dependencies:
-  - [ ] `uv add opentelemetry-api==1.29.0`
-  - [ ] `uv add opentelemetry-sdk==1.29.0`
-  - [ ] `uv add opentelemetry-instrumentation==0.50.0`
-- [ ] Configure OTEL:
-  - [ ] Set up trace provider
-  - [ ] Configure OTLP exporter
-  - [ ] Set service name
-- [ ] Instrument components:
-  - [ ] HTTP clients (httpx)
-  - [ ] Database queries
-  - [ ] Redis operations
-  - [ ] Message processing
-- [ ] Add custom spans:
-  - [ ] Task parsing
-  - [ ] Transcription
-  - [ ] Todoist API calls
-- [ ] Add span attributes:
-  - [ ] User ID
-  - [ ] Message type
-  - [ ] Processing result
-
-### Day 25: Prometheus Metrics
-- [ ] Add prometheus client: `uv add prometheus-client==0.21.1`
-- [ ] Create `src/core/metrics.py`:
-  - [ ] Define counter metrics:
-    - [ ] messages_total
-    - [ ] tasks_created_total
-    - [ ] errors_total
-  - [ ] Define histogram metrics:
-    - [ ] processing_duration
-    - [ ] api_call_duration
-  - [ ] Define gauge metrics:
-    - [ ] active_users
-    - [ ] cache_hit_ratio
-- [ ] Add metrics endpoint:
-  - [ ] Expose on /metrics
-  - [ ] Format for Prometheus
-- [ ] Instrument code:
-  - [ ] Message handlers
-  - [ ] API calls
-  - [ ] Cache operations
-- [ ] Create Grafana dashboards:
-  - [ ] Service overview
-  - [ ] User activity
-  - [ ] Error rates
-  - [ ] Performance metrics
-
-## Week 6: Production Readiness
-
-### Day 26-27: Comprehensive Testing
-- [ ] Unit tests completion:
-  - [ ] 90% coverage target
-  - [ ] All services tested
-  - [ ] All handlers tested
-  - [ ] Mock all externals
-- [ ] Integration tests:
-  - [ ] Database operations
-  - [ ] Redis operations
-  - [ ] Full message flow
-- [ ] Load testing:
-  - [ ] Use locust
-  - [ ] Test 1000 concurrent users
-  - [ ] Measure latencies
-  - [ ] Find bottlenecks
-- [ ] Security testing:
-  - [ ] Input validation
-  - [ ] SQL injection
-  - [ ] Token security
-  - [ ] Rate limiting
-
-### Day 28: CI/CD Pipeline
-- [ ] Create `.github/workflows/ci.yml`:
-  - [ ] Run on PR and push
-  - [ ] Set up Python 3.12
-  - [ ] Install uv
-  - [ ] Run linters
-  - [ ] Run tests
-  - [ ] Upload coverage
-- [ ] Create `.github/workflows/cd.yml`:
-  - [ ] Build Docker image
-  - [ ] Push to registry
-  - [ ] Deploy to staging
-  - [ ] Run smoke tests
-  - [ ] Deploy to production
-- [ ] Add security scanning:
-  - [ ] Dependency scanning
-  - [ ] Container scanning
-  - [ ] Secret scanning
-
-### Day 29: Documentation
-- [ ] Complete README.md:
-  - [ ] Project overview
-  - [ ] Quick start guide
-  - [ ] Configuration
+- [ ] **Документация**:
+  - [ ] API документация
+  - [ ] User guide с скриншотами
+  - [ ] CONTRIBUTING.md
   - [ ] Deployment guide
-- [ ] API documentation:
-  - [ ] Document all endpoints
-  - [ ] Add examples
-  - [ ] Error responses
-- [ ] Create CONTRIBUTING.md
-- [ ] Create SECURITY.md
-- [ ] Add inline code documentation
 
-### Day 30: Production Deployment
-- [ ] Finalize Docker image:
-  - [ ] Minimize size
-  - [ ] Security hardening
-  - [ ] Health checks
-- [ ] Create Kubernetes manifests:
-  - [ ] Deployment
-  - [ ] Service
-  - [ ] ConfigMap
-  - [ ] Secrets
-  - [ ] HPA
-- [ ] Set up monitoring:
-  - [ ] Prometheus
-  - [ ] Grafana
-  - [ ] Alerts
-- [ ] Performance tuning:
-  - [ ] Database indexes
-  - [ ] Connection pools
-  - [ ] Cache optimization
-- [ ] Final checklist:
-  - [ ] All tests passing
-  - [ ] Documentation complete
-  - [ ] Monitoring active
-  - [ ] Backups configured
-  - [ ] Incident response plan
+## 📋 Следующие шаги
 
-## Week 7: Voice Command Management (Natural Language Control)
+1. **Тестирование Voice Commands** (сейчас):
+   - Проверить различные формулировки команд
+   - Оптимизировать промпты если нужно
+   - Собрать фидбек
 
-### Цель
-Реализовать голосовое управление задачами через естественный язык вместо текстовых команд. Пользователь сможет говорить "удали последнюю задачу" вместо `/undo`.
+2. **Production подготовка**:
+   - Настроить домен и SSL
+   - Подготовить production окружение
+   - Настроить мониторинг
 
-### Архитектурное решение
-Использовать Discriminated Union pattern с Instructor для классификации намерений (Intent).
+3. **Расширение функционала**:
+   - Видео/аудио поддержка
+   - Больше типов команд
+   - Шаблоны задач
 
-### Day 1: Intent Models & Planning
-- [x] Обновить CHECKLIST.md с полным планом реализации
-- [x] Создать файл `src/models/intent.py`
-- [x] Определить базовые модели:
-  - [x] `TaskCreation` с полем `type: Literal["create_task"]`
-  - [x] `CommandExecution` с полями для типа команды и параметров
-  - [x] Union тип `Intent = Union[TaskCreation, CommandExecution]`
-- [x] Написать тесты для моделей Intent
-- [x] Определить все поддерживаемые команды:
-  - [x] view_tasks (показать задачи)
-  - [x] delete_task (удалить задачу)
-  - [x] update_task (изменить задачу)
-  - [x] complete_task (выполнить задачу)
+## 🎯 Цели проекта
 
-### Day 2: OpenAI Service Extension
-- [x] Добавить метод `parse_intent()` в OpenAIService
-- [x] Создать system prompt для классификации намерений
-- [x] Добавить примеры для каждого типа намерения
-- [x] Написать unit тесты для parse_intent (8 тестов)
-- [ ] Протестировать с реальными примерами команд
-- [ ] Оптимизировать промпт для точности классификации
+**MVP достигнут**: Бот создает задачи из текста/голоса с <4с задержкой
 
-### Day 3: Todoist API Extensions
-- [x] Добавить в TodoistService метод `get_tasks(filter_string)`
-- [x] Добавить метод `get_recent_tasks(limit=10)`
-- [x] Добавить метод `reopen_task(task_id)`
-- [x] Реализовать поддержку фильтров: today, tomorrow, overdue, p1-p4
-- [x] Написать тесты для новых методов (10 тестов)
+**Текущая цель**: Production-ready с естественным языком для команд
 
-### Day 4: Command Executor
-- [x] Создать `src/services/command_executor.py`
-- [x] Реализовать базовый класс CommandExecutor
-- [x] Реализовать методы:
-  - [x] `_view_tasks()` - форматированный вывод задач
-  - [x] `_delete_task()` - удаление с подтверждением
-  - [x] `_update_task()` - обновление параметров
-  - [x] `_complete_task()` - отметка выполнения
-- [x] Добавить форматирование ответов для Telegram
-- [x] Написать тесты для CommandExecutor (12 тестов)
+**Будущее**: Полноценный AI ассистент для управления задачами
 
-### Day 5: Integration & Message Handlers
-- [ ] Модифицировать `handle_text_message()` для поддержки Intent
-- [ ] Модифицировать `handle_voice_message()` аналогично
-- [ ] Добавить маршрутизацию на основе типа Intent
-- [ ] Сохранить обратную совместимость
-- [ ] Добавить обработку ошибок классификации
+## 📝 Примеры команд
 
-### Day 6: Testing & Documentation
-- [ ] Написать integration тесты для полного flow
-- [ ] Протестировать edge cases:
-  - [ ] Неоднозначные команды
-  - [ ] Смешанные намерения
-  - [ ] Команды на разных языках
-- [ ] Обновить /help с примерами голосовых команд
-- [ ] Добавить примеры в README.md
-
-### Примеры команд для тестирования
-```
-СОЗДАНИЕ ЗАДАЧ:
+### Создание задач:
 - "Купить молоко завтра"
 - "Встреча с клиентом в 15:00"
 - "Напомни позвонить маме"
 
-КОМАНДЫ УПРАВЛЕНИЯ:
+### Управление задачами:
 - "Покажи все задачи на сегодня"
-- "Что у меня запланировано на завтра?"
+- "Что у меня на завтра?"
 - "Удали последнюю задачу"
-- "Убери предыдущую задачу"
-- "Измени приоритет последней задачи на высокий"
+- "Выполни последнюю задачу"
+- "Измени приоритет последней на высокий"
 - "Сделай последнюю задачу срочной"
-- "Отметь последнюю задачу выполненной"
-- "Перенеси последнюю задачу на завтра"
+
+## 🛠 Полезные команды
+
+```bash
+# Разработка
+make docker-build    # Собрать образ
+make docker-deploy   # Полный деплой
+make docker-logs     # Логи бота
+make test           # Запустить тесты
+make lint           # Проверить код
+
+# Отладка
+make shell-postgres  # PostgreSQL консоль
+make docker-shell    # Bash в контейнере
 ```
 
-## Completed Improvements (2025-01-19)
+## 📊 Метрики производительности
 
-### Deepgram Integration Fix
-- [x] Fixed Deepgram empty transcript issue:
-  - [x] Changed model from nova-2 back to nova-3
-  - [x] Removed explicit language parameter for auto-detection
-  - [x] Fixed MIME type to "audio/ogg;codecs=opus" for Telegram voice messages
-  - [x] Added debug logging for audio size and content
-  - [x] Updated CLAUDE.md with Deepgram integration notes
-
-### Docker Setup Completed
-- [x] Created production-ready Dockerfile:
-  - [x] Multi-stage build with uv
-  - [x] Non-root user (appuser)
-  - [x] Health check endpoint
-  - [x] Minimal image size optimization
-- [x] Updated docker-compose.yml:
-  - [x] Added bot service with proper networking
-  - [x] Connected all services to taskerbot-network
-  - [x] Configured health check dependencies
-- [x] Created .dockerignore for clean builds
-- [x] Added Docker commands to Makefile:
-  - [x] docker-build, docker-up, docker-down
-  - [x] docker-logs, docker-shell, docker-restart
-
-### Fixed Issues
-- [x] PostgreSQL connection error with Docker
-  - [x] Created Makefile for easier Docker management
-  - [x] Fixed DATABASE_URL environment variable conflicts
-  - [x] Added `make run` command with proper env handling
-- [x] Database overflow error for large Telegram IDs
-  - [x] Changed user ID columns from Integer to BigInteger
-  - [x] Updated both User and Task models
-- [x] Authentication flow infinite loop
-  - [x] Fixed AuthMiddleware to allow messages during setup
-  - [x] Added FSM state checking for token processing
-  - [x] Created separate states.py module
-
-### Infrastructure Improvements
-- [x] Created comprehensive Makefile with commands:
-  - [x] `make run` - Run bot with correct DATABASE_URL
-  - [x] `make restart` - Full Docker restart with clean DB
-  - [x] `make logs` - View container logs
-  - [x] `make status` - Check container status
-  - [x] `make test` - Run tests
-  - [x] `make lint` - Run linter
-  - [x] `make typecheck` - Run type checker
-
-## Additional Features for Agencies
-
-### Quick Commands & Templates
-- [ ] Implement quick commands:
-  - [ ] `/t` - create task for today
-  - [ ] `/tm` - create task for tomorrow
-  - [ ] `/urgent` - create high priority task
-  - [ ] `/meeting [client]` - create meeting task with template
-- [ ] Add project shortcuts:
-  - [ ] Auto-complete for frequent projects
-  - [ ] Last 5 used projects in quick menu
-  - [ ] Default project setting per user
-- [ ] Create task templates:
-  - [ ] Client call template
-  - [ ] Meeting notes template
-  - [ ] Review/feedback template
-  - [ ] Report deadline template
-
-### Voice Enhancements
-- [ ] Improve voice recognition for business context:
-  - [ ] Client name detection
-  - [ ] Project keyword mapping
-  - [ ] Deadline parsing ("end of week", "next Monday")
-- [ ] Add voice feedback:
-  - [ ] Confirmation message after task creation
-  - [ ] Voice note summary in text
-- [x] Multi-language support:
-  - [x] Russian language for Deepgram (nova-3 supports it)
-  - [x] Language auto-detection (enabled by default)
-  - [ ] Per-user language preference
-
-### Team Features
-- [ ] Basic team statistics:
-  - [ ] Daily task count
-  - [ ] Weekly summary
-  - [ ] Most active projects
-- [ ] Shared project templates:
-  - [ ] Agency-specific project list
-  - [ ] Common labels (billable, internal, urgent)
-  - [ ] Standard priority mappings
-
-## Post-Launch Tasks
-
-### Maintenance & Improvements
-- [ ] Set up on-call rotation
-- [ ] Create runbook for common issues
-- [ ] Plan for feature additions:
-  - [ ] Multiple language support
-  - [ ] Voice response messages
-  - [ ] Task templates
-  - [ ] Bulk operations
-- [ ] Performance optimization:
-  - [ ] Database query optimization
-  - [ ] Caching strategy review
-  - [ ] API call batching
-- [ ] User feedback implementation:
-  - [ ] Feature requests
-  - [ ] Bug fixes
-  - [ ] UX improvements
-
-## Critical Next Steps (TODO Immediately)
-
-### 1. Production Configuration
-- [ ] Create production .env file with real tokens
-- [ ] Set up HTTPS webhook URL (required for Telegram)
-- [ ] Configure proper encryption key (32 bytes base64)
-- [ ] Set up domain and SSL certificate
-
-### 2. Missing Core Features
-- [ ] Video note transcription (MP4 with audio)
-- [ ] Audio file support (MP3, WAV)
-- [ ] Error recovery and retry mechanisms
-- [ ] Whisper fallback for Deepgram failures
-
-### 3. User Experience
-- [ ] Add /revoke command to remove token
-- [ ] Add /test command to validate Todoist connection
-- [ ] Implement proper error messages in Russian
-- [ ] Add task creation confirmation with Todoist link
-
-### 4. Security & Monitoring
-- [ ] Enable Sentry error tracking
-- [ ] Add health check monitoring
-- [ ] Implement rate limiting per user
-- [ ] Add request/response logging
-
-### 5. Testing & Documentation
-- [ ] Test with real Todoist API (currently mocked)
-- [ ] Load test with multiple concurrent users
-- [ ] Create user guide with screenshots
-- [ ] Document API rate limits and quotas
-
-## Working Features (Confirmed)
-
-### ✅ Core Pipeline
-1. **Text Messages** → OpenAI parsing → Todoist task creation
-2. **Voice Messages** → Deepgram transcription → OpenAI → Todoist
-3. **Authentication** → /setup command → encrypted token storage
-4. **Database** → PostgreSQL with encrypted tokens
-5. **Russian Support** → Full support in transcription and parsing
-
-### ✅ Infrastructure
-- Docker setup with PostgreSQL + Redis
-- Makefile for easy management
-- Health check endpoint
-- Proper error handling and logging
-- FSM for token setup flow
-
-## Task Management Features (NEW - 2025-01-19)
-
-### Delete/Undo Functionality
-- [x] Add delete_task method to TodoistService
-  - [x] DELETE /tasks/{task_id} endpoint
-  - [x] Handle 404 errors gracefully
-  - [x] Return success/failure status
-- [x] Add complete_task method to TodoistService
-  - [x] POST /tasks/{task_id}/close endpoint
-  - [x] Handle already completed tasks
-- [x] Extend TaskRepository:
-  - [x] get_last_task(user_id) - return latest task with todoist_id
-  - [x] get_recent_tasks(user_id, limit=5) - for /recent command
-  - [x] delete_task_record(task_id) - mark as deleted in DB
-- [x] Update create_task to save todoist_id in Task record:
-  - [x] Pass todoist_task["id"] to repository
-  - [x] Ensure foreign key relationship works
-
-### Inline Keyboard Support
-- [x] Create keyboard builder in formatters.py:
-  - [x] create_task_keyboard(task_id) - returns InlineKeyboardMarkup
-  - [x] Buttons: ❌ Delete, ✅ Complete, ✏️ Edit
-- [x] Update task_to_telegram_html to include keyboard
-- [x] Create src/handlers/callbacks.py:
-  - [x] Router for callback queries
-  - [x] handle_delete_task callback
-  - [x] handle_complete_task callback
-  - [x] handle_edit_task callback (placeholder)
-  - [x] Send confirmation messages
-
-### New Commands
-- [x] Implement /undo command:
-  - [x] Get last task from repository
-  - [x] Delete from Todoist
-  - [x] Mark as deleted in DB
-  - [x] Send confirmation
-- [x] Implement /recent command:
-  - [x] Get last 5 tasks with todoist_id
-  - [x] Format as list with inline buttons
-  - [x] Handle pagination if needed
-
-### Voice Command Recognition (CANCELLED - Keep It Simple)
-- ~~Update OpenAI prompt to detect delete commands~~
-- ~~Add is_delete_command field to TaskSchema~~
-- ~~Detect phrases: "удали предыдущую", "отмени задачу"~~
-- ~~Handle delete commands in message handlers~~
-
-**Decision**: Voice command recognition for deletion was cancelled to keep the bot simple and predictable. Users should use /undo command or inline buttons for task management.
-
-### Testing
-- [ ] Test Todoist API delete/complete endpoints
-- [ ] Test inline keyboard callbacks
-- [ ] Test /undo and /recent commands
-- [ ] Test error scenarios (task not found, etc.)
-
-### Summary of Implemented Features
-✅ **Basic Task Management Completed:**
-- Any message (text/voice) creates a task
-- Inline buttons under each created task (Delete, Complete, Edit)
-- `/undo` command to delete the last task
-- `/recent` command to view and manage recent tasks
-- All operations work with both Todoist API and local database
-
-✅ **Design Decision:**
-- Kept it simple - no AI command detection
-- Clear, explicit user actions only
-- Fast and predictable behavior
-
-## Callback Handlers & Auto-delete Feature (2025-01-19)
-
-### Fixed Callback Handler Issues
-- [x] AuthMiddleware now processes CallbackQuery events
-- [x] Added CallbackQuery support to UserContextMiddleware
-- [x] Registered middleware for callback_query in main.py
-- [x] All inline keyboard buttons now work correctly
-- [x] Tested "Complete" and "Delete" buttons functionality
-
-### Auto-delete Previous Task Feature
-- [x] Added `auto_delete_previous` field to User model (boolean, default=False)
-- [x] Created SQL migration for database update
-- [x] Implemented `/autodelete` command to toggle the feature
-- [x] Updated text message handler with auto-deletion logic
-- [x] Updated voice message handler with auto-deletion logic
-- [x] Added UserRepository.update() method for settings persistence
-- [x] Updated `/help` command to include new feature
-
-### Docker & Deployment Updates
-- [x] Learned to use `make docker-build` (not just restart!)
-- [x] Applied SQL migrations after container rebuild
-- [x] Verified code updates in running containers
-- [x] Pushed all changes to GitHub
-
-## Known Issues & Limitations
-
-1. **Webhook Mode** - Not tested, requires HTTPS domain
-2. **Todoist Projects** - Project validation not fully implemented
-3. **Rate Limiting** - In-memory only, needs Redis backend
-4. **Video/Audio Files** - Not implemented yet
-5. **Token Validation** - No automatic check if token is valid
-6. **Edit Task Button** - Shows "not implemented" message (placeholder)
-
-## Performance Metrics (Current)
-- Voice transcription: 3-4 seconds
-- Task creation: <1 second
-- Total latency: <4 seconds ✅
-- Memory usage: ~100MB
-- Database pool: 10 connections
-
-## Notes
-
-- Always run tests after implementing features
-- Update this checklist when discovering new tasks
-- Check dependencies for security updates weekly
-- Monitor error rates and performance daily
-- Keep documentation in sync with code
-- Voice messages work perfectly with Russian language
-- Deepgram nova-3 provides excellent accuracy
+- Voice → Task: 3-4 секунды
+- Text → Task: <1 секунда  
+- Memory: ~100MB
+- Test coverage: 84%
+- Uptime target: 99.8%
