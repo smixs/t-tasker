@@ -248,6 +248,58 @@ class TodoistService:
                 return project
         return None
 
+    async def update_task(
+        self,
+        task_id: str,
+        **kwargs: Any
+    ) -> dict[str, Any]:
+        """Update an existing task in Todoist.
+        
+        Args:
+            task_id: Todoist task ID
+            **kwargs: Fields to update (content, description, due_string, priority, labels)
+            
+        Returns:
+            Updated task data
+            
+        Raises:
+            TodoistError: For API errors
+        """
+        await self._rate_limiter.acquire()
+        
+        # Build update data - only include fields that are provided
+        update_data = {}
+        allowed_fields = ["content", "description", "due_string", "priority", "labels"]
+        
+        for field in allowed_fields:
+            if field in kwargs and kwargs[field] is not None:
+                update_data[field] = kwargs[field]
+        
+        if not update_data:
+            raise TodoistError("No fields to update")
+        
+        try:
+            async with self._get_client() as client:
+                response = await client.post(
+                    f"{self.BASE_URL}/tasks/{task_id}",
+                    headers=self.headers,
+                    json=update_data,
+                )
+                
+                if response.status_code == 401:
+                    raise InvalidTokenError()
+                elif response.status_code == 403:
+                    raise QuotaExceededError()
+                elif response.status_code == 404:
+                    raise TodoistError("Task not found")
+                elif response.status_code != 200:
+                    raise TodoistError(f"Failed to update task: {response.status_code}")
+                
+                return response.json()
+        except httpx.RequestError as e:
+            logger.error(f"Network error updating task: {e}")
+            raise TodoistError(f"Network error: {str(e)}")
+
     async def delete_task(self, task_id: str) -> bool:
         """Delete a task from Todoist.
 
