@@ -5,9 +5,10 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 ## Quick Stats
 - Total tasks: ~150
 - Estimated time: 6 weeks
-- Current progress: ~40%
+- Current progress: ~55%
 - Last updated: 2025-01-19
 - Test coverage: 42% (37 tests passing)
+- Core functionality: ✅ Text → Task pipeline working
 
 ## Week 1: Project Setup & Basic Bot Structure
 
@@ -198,24 +199,24 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [x] Test schema validation
 
 ### Day 8: Text Message Handler
-- [ ] Create `src/handlers/messages.py`
-- [ ] Create message router
-- [ ] Implement text message handler:
-  - [ ] Filter for text messages only
-  - [ ] Call OpenAI service
-  - [ ] Handle parsing errors
-  - [ ] Send formatted response
-- [ ] Create `src/utils/formatters.py`:
-  - [ ] Create task_to_telegram_html function
-  - [ ] Handle None values properly
-  - [ ] Format dates nicely
-  - [ ] Add emoji indicators
-- [ ] Implement typing action:
-  - [ ] Show "typing..." while processing
-  - [ ] Handle long operations
-- [ ] Add rate limiting per user:
-  - [ ] Track message counts in memory
-  - [ ] Return rate limit errors
+- [x] Create `src/handlers/messages.py`
+- [x] Create message router
+- [x] Implement text message handler:
+  - [x] Filter for text messages only
+  - [x] Call OpenAI service
+  - [x] Handle parsing errors
+  - [x] Send formatted response
+- [x] Create `src/utils/formatters.py`:
+  - [x] Create task_to_telegram_html function
+  - [x] Handle None values properly
+  - [x] Format dates nicely
+  - [x] Add emoji indicators
+- [x] Implement typing action:
+  - [x] Show "typing..." while processing
+  - [x] Handle long operations
+- [x] Add rate limiting per user:
+  - [x] Track message counts in memory
+  - [x] Return rate limit errors
 - [ ] Test end-to-end flow:
   - [ ] Send various task formats
   - [ ] Test error messages
@@ -321,26 +322,26 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [ ] Invalid API key
 
 ### Day 15: Todoist Client
-- [ ] Add httpx: `uv add httpx==0.28.1`
-- [ ] Create `src/services/todoist_service.py`:
-  - [ ] Create async HTTP client
-  - [ ] Implement Personal Token validation
-  - [ ] Implement create_task method
-  - [ ] Add get_projects method
-  - [ ] Add get_labels method
-- [ ] Create `src/core/rate_limiter.py`:
-  - [ ] Implement token bucket algorithm
-  - [ ] 450 requests per 15 minutes (conservative limit)
-  - [ ] Per-user tracking
+- [x] Add httpx: `uv add httpx==0.28.1`
+- [x] Create `src/services/todoist_service.py`:
+  - [x] Create async HTTP client
+  - [x] Implement Personal Token validation
+  - [x] Implement create_task method
+  - [x] Add get_projects method
+  - [x] Add get_labels method
+- [x] Create `src/core/rate_limiter.py` (integrated in TodoistService):
+  - [x] Implement token bucket algorithm
+  - [x] 450 requests per 15 minutes (conservative limit)
+  - [x] Per-user tracking
   - [ ] Add Redis backend later
-- [ ] Add Todoist exceptions:
-  - [ ] TodoistError
-  - [ ] QuotaExceededError
-  - [ ] InvalidTokenError
-- [ ] Test with mock Todoist API:
-  - [ ] Create mock responses
-  - [ ] Test rate limiting
-  - [ ] Test error handling
+- [x] Add Todoist exceptions:
+  - [x] TodoistError
+  - [x] QuotaExceededError
+  - [x] InvalidTokenError
+- [x] Test with mock Todoist API:
+  - [x] Create mock responses
+  - [x] Test rate limiting
+  - [ ] Test error handling (partially done)
 
 ## Week 4: Database & User Management
 
@@ -391,21 +392,21 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [x] Check if user has token in DB
   - [ ] If not, redirect to /setup
   - [ ] If yes, show main menu
-- [ ] Create `src/middleware/auth.py`:
-  - [ ] Check user in database
-  - [ ] Decrypt token if exists
-  - [ ] Add to context
-  - [ ] Handle unauthorized users
+- [x] Create `src/middleware/auth.py`:
+  - [x] Check user in database
+  - [x] Decrypt token if exists
+  - [x] Add to context
+  - [x] Handle unauthorized users
 - [x] Add token management commands:
   - [x] `/setup` - add/update token
   - [x] `/status` - check connection status
   - [x] `/cancel` - cancel current operation
   - [ ] `/revoke` - remove token
   - [ ] `/test` - test current token
-- [ ] Test token flow:
-  - [ ] Test token validation
-  - [ ] Test token storage
-  - [ ] Test middleware
+- [ ] Test token flow (READY TO TEST):
+  - [ ] Test token validation with real Todoist API
+  - [ ] Test token storage in database
+  - [ ] Test middleware auth flow
 
 ### Day 19: User Commands
 - [ ] Implement `/settings` command:
