@@ -2,8 +2,20 @@
 
 import logging
 
-from aiogram import Router, F
+from aiogram import Bot, F, Router
 from aiogram.types import Message
+
+from src.core.database import get_database
+from src.core.exceptions import BotError, UnauthorizedError
+from src.repositories.user import UserRepository
+from src.services.encryption import EncryptionService
+from src.services.openai_service import OpenAIService
+from src.services.todoist_service import TodoistService
+from src.utils.formatters import (
+    format_error_message,
+    format_processing_message,
+    task_to_telegram_html,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -12,87 +24,141 @@ message_router = Router(name="messages")
 
 
 @message_router.message(F.text)
-async def handle_text_message(message: Message) -> None:
+async def handle_text_message(message: Message, bot: Bot) -> None:
     """Handle text messages."""
-    logger.info(f"Received text message: {message.text[:50]}...")
+    if not message.from_user or not message.text:
+        return
+
+    user_id = message.from_user.id
+    logger.info(f"Received text message from {user_id}: {message.text[:50]}...")
+
+    # Send typing action
+    await bot.send_chat_action(message.chat.id, "typing")
     
-    # TODO: Implement task parsing with OpenAI
-    # TODO: Create task in Todoist
-    
-    await message.answer(
-        " >;CG8; 20H5 A>>1I5=85!\n\n"
-        "=� $C=:F8O A>740=8O 7040G ?>:0 2 @07@01>B:5.\n"
-        f"0H B5:AB: {message.text}"
-    )
+    # Send processing message
+    processing_msg = await message.answer(format_processing_message())
+
+    try:
+        # Get user from database
+        db = get_database()
+        async with db.get_session() as session:
+            user_repo = UserRepository(session)
+            
+            # Ensure user exists
+            user = await user_repo.create_or_update(
+                user_id=user_id,
+                username=message.from_user.username,
+                first_name=message.from_user.first_name,
+                last_name=message.from_user.last_name,
+                language_code=message.from_user.language_code
+            )
+            
+            # Check if user has Todoist token
+            if not user.todoist_token_encrypted:
+                raise UnauthorizedError()
+            
+            # Decrypt token
+            encryption = EncryptionService()
+            todoist_token = encryption.decrypt(user.todoist_token_encrypted)
+            
+            # Parse task with OpenAI
+            openai_service = OpenAIService()
+            task = await openai_service.parse_task(message.text)
+            
+            # Create task in Todoist
+            async with TodoistService(todoist_token) as todoist:
+                # Check if project exists
+                if task.project_name:
+                    project = await todoist.get_project_by_name(task.project_name)
+                    project_id = project["id"] if project else None
+                else:
+                    project_id = None
+                
+                # Create the task
+                todoist_task = await todoist.create_task(
+                    content=task.content,
+                    description=task.description,
+                    project_id=project_id,
+                    labels=task.labels,
+                    priority=task.priority or 1,
+                    due_string=task.due_string,
+                    duration=task.duration,
+                )
+            
+            # Increment task counter
+            await user_repo.increment_tasks_count(user_id)
+            
+            # Delete processing message
+            await processing_msg.delete()
+            
+            # Send success message
+            response = task_to_telegram_html(task, todoist_task)
+            await message.answer(response, parse_mode="HTML")
+            
+    except BotError as e:
+        logger.warning(f"Bot error for user {user_id}: {e}")
+        await processing_msg.delete()
+        await message.answer(format_error_message(e))
+    except Exception as e:
+        logger.error(f"Unexpected error for user {user_id}: {e}", exc_info=True)
+        await processing_msg.delete()
+        await message.answer(format_error_message(e))
 
 
 @message_router.message(F.voice)
 async def handle_voice_message(message: Message) -> None:
     """Handle voice messages."""
-    logger.info(f"Received voice message, duration: {message.voice.duration}s")
-    
+    if message.voice:
+        logger.info(f"Received voice message: duration={message.voice.duration}s")
+
     # TODO: Download voice file
     # TODO: Transcribe with Deepgram/Whisper
-    # TODO: Parse task with OpenAI
-    # TODO: Create task in Todoist
-    
+    # TODO: Process transcribed text as task
+
     await message.answer(
-        "<� >;CG8; 3>;>A>2>5 A>>1I5=85!\n\n"
-        "=� $C=:F8O @0A?>7=020=8O @5G8 ?>:0 2 @07@01>B:5.\n"
-        f";8B5;L=>ABL: {message.voice.duration} A5:"
+        "🎤 Получил голосовое сообщение.\n"
+        "Функция распознавания речи скоро будет доступна!"
     )
 
 
-@message_router.message(F.video_note | F.video)
-async def handle_video_message(message: Message) -> None:
-    """Handle video and video note messages."""
+@message_router.message(F.video_note)
+async def handle_video_note(message: Message) -> None:
+    """Handle video notes (round videos)."""
     if message.video_note:
-        logger.info(f"Received video note, duration: {message.video_note.duration}s")
-        duration = message.video_note.duration
-    else:
-        logger.info(f"Received video, duration: {message.video.duration}s")
-        duration = message.video.duration
-    
-    # TODO: Download video file
-    # TODO: Extract audio
-    # TODO: Transcribe with Deepgram/Whisper
-    # TODO: Parse task with OpenAI
-    # TODO: Create task in Todoist
-    
+        logger.info(f"Received video note: duration={message.video_note.duration}s")
+
+    # TODO: Extract audio from video
+    # TODO: Process as voice message
+
     await message.answer(
-        "=� >;CG8; 2845> A>>1I5=85!\n\n"
-        "=� $C=:F8O @0A?>7=020=8O @5G8 87 2845> ?>:0 2 @07@01>B:5.\n"
-        f";8B5;L=>ABL: {duration} A5:"
+        "📹 Получил видео сообщение.\n"
+        "Функция обработки видео скоро будет доступна!"
+    )
+
+
+@message_router.message(F.video)
+async def handle_video_message(message: Message) -> None:
+    """Handle regular video messages."""
+    logger.info("Received video message")
+
+    # TODO: Check if video has audio track
+    # TODO: Extract and process audio
+
+    await message.answer(
+        "📹 Получил видео.\n"
+        "Для создания задач используйте текст или голосовые сообщения."
     )
 
 
 @message_router.message(F.audio)
 async def handle_audio_message(message: Message) -> None:
     """Handle audio file messages."""
-    logger.info(f"Received audio file: {message.audio.file_name}")
-    
-    # TODO: Download audio file
-    # TODO: Transcribe with Deepgram/Whisper
-    # TODO: Parse task with OpenAI
-    # TODO: Create task in Todoist
-    
-    await message.answer(
-        "<� >;CG8; 0C48> D09;!\n\n"
-        "=� $C=:F8O @0A?>7=020=8O 0C48> ?>:0 2 @07@01>B:5.\n"
-        f"$09;: {message.audio.file_name}"
-    )
+    if message.audio:
+        logger.info(f"Received audio file: {message.audio.file_name}")
 
+    # TODO: Process as voice message
 
-@message_router.message()
-async def handle_unsupported_message(message: Message) -> None:
-    """Handle all other message types."""
-    logger.warning(f"Received unsupported message type: {message.content_type}")
-    
     await message.answer(
-        "L 728=8B5, O ?>:0 =5 C<5N >1@010BK20BL B0:>9 B8? A>>1I5=89.\n\n"
-        "/ ?>=8<0N:\n"
-        "" "5:AB>2K5 A>>1I5=8O\n"
-        "" >;>A>2K5 A>>1I5=8O\n"
-        "" 845> A>>1I5=8O\n"
-        "" C48> D09;K"
+        "🎵 Получил аудио файл.\n"
+        "Функция обработки аудио скоро будет доступна!"
     )

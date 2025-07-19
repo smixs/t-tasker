@@ -5,48 +5,50 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 ## Quick Stats
 - Total tasks: ~150
 - Estimated time: 6 weeks
-- Current progress: 0%
+- Current progress: ~40%
+- Last updated: 2025-01-19
+- Test coverage: 42% (37 tests passing)
 
 ## Week 1: Project Setup & Basic Bot Structure
 
 ### Day 1-2: Environment & Project Structure
-- [ ] Install Python 3.12 if not already installed
-- [ ] Install uv package manager: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- [ ] Create project directory: `mkdir t-tasker && cd t-tasker`
-- [ ] Initialize project with uv: `uv init`
-- [ ] Create virtual environment: `uv venv`
-- [ ] Create project structure:
+- [x] Install Python 3.12 if not already installed
+- [x] Install uv package manager: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- [x] Create project directory: `mkdir t-tasker && cd t-tasker`
+- [x] Initialize project with uv: `uv init`
+- [x] Create virtual environment: `uv venv`
+- [x] Create project structure:
   ```
   mkdir -p src/{core,handlers,services,models}
   touch src/__init__.py
   touch src/{core,handlers,services,models}/__init__.py
   ```
-- [ ] Create base files:
+- [x] Create base files:
   ```
   touch Dockerfile docker-compose.yml .gitignore
   touch tests/__init__.py
   ```
-- [ ] Initialize git repository: `git init`
-- [ ] Create .gitignore with Python template
+- [x] Initialize git repository: `git init`
+- [x] Create .gitignore with Python template
 - [ ] Add core dependencies to pyproject.toml:
-  - [ ] `uv add aiogram==3.21.0`
-  - [ ] `uv add pydantic==2.10.4`
-  - [ ] `uv add pydantic-settings==2.7.0`
-  - [ ] `uv add python-dotenv==1.0.1`
+  - [x] `uv add aiogram==3.21.0`
+  - [x] `uv add pydantic==2.10.4`
+  - [x] `uv add pydantic-settings==2.7.0`
+  - [x] `uv add python-dotenv==1.0.1`
 - [ ] Add dev dependencies:
-  - [ ] `uv add --dev ruff==0.8.6`
-  - [ ] `uv add --dev mypy==1.14.1`
-  - [ ] `uv add --dev pytest==8.3.4`
-  - [ ] `uv add --dev pytest-asyncio==0.25.2`
-  - [ ] `uv add --dev pytest-cov==6.0.0`
-- [ ] Configure ruff in pyproject.toml:
+  - [x] `uv add --dev ruff==0.8.6`
+  - [x] `uv add --dev mypy==1.14.1`
+  - [x] `uv add --dev pytest==8.3.4`
+  - [x] `uv add --dev pytest-asyncio==0.25.2`
+  - [x] `uv add --dev pytest-cov==6.0.0`
+- [x] Configure ruff in pyproject.toml:
   ```toml
   [tool.ruff]
   line-length = 120
   target-version = "py312"
   select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "ASYNC"]
   ```
-- [ ] Configure mypy in pyproject.toml:
+- [x] Configure mypy in pyproject.toml:
   ```toml
   [tool.mypy]
   python_version = "3.12"
@@ -54,7 +56,7 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   warn_return_any = true
   warn_unused_configs = true
   ```
-- [ ] Configure pytest in pyproject.toml:
+- [x] Configure pytest in pyproject.toml:
   ```toml
   [tool.pytest.ini_options]
   asyncio_mode = "auto"
@@ -65,25 +67,25 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 - [ ] Create initial commit: `git add . && git commit -m "Initial project structure"`
 
 ### Day 3: Settings & Configuration
-- [ ] Create `src/core/settings.py`
+- [x] Create `src/core/settings.py`
 - [ ] Import required modules:
-  - [ ] `from pydantic_settings import BaseSettings, SettingsConfigDict`
-  - [ ] `from pydantic import Field, field_validator`
+  - [x] `from pydantic_settings import BaseSettings, SettingsConfigDict`
+  - [x] `from pydantic import Field, field_validator`
   - [ ] `from typing import Optional`
   - [ ] `import os`
   - [ ] `from pathlib import Path`
-- [ ] Create Settings class with groups:
-  - [ ] Telegram settings:
-    - [ ] `telegram_bot_token: str`
+- [x] Create Settings class with groups:
+  - [x] Telegram settings:
+    - [x] `telegram_bot_token: str`
     - [ ] `telegram_bot_token_file: Optional[Path]`
-    - [ ] `telegram_webhook_url: str`
-    - [ ] `telegram_webhook_secret: str`
-  - [ ] OpenAI settings:
-    - [ ] `openai_api_key: str`
+    - [x] `telegram_webhook_url: str`
+    - [x] `telegram_webhook_secret: str`
+  - [x] OpenAI settings:
+    - [x] `openai_api_key: str`
     - [ ] `openai_api_key_file: Optional[Path]`
-    - [ ] `openai_model: str = "gpt-4o-2024-11-20"`
-    - [ ] `openai_max_retries: int = 3`
-    - [ ] `openai_timeout: int = 30`
+    - [x] `openai_model: str = "gpt-4o-2024-11-20"`
+    - [x] `openai_max_retries: int = 3`
+    - [x] `openai_timeout: int = 30`
   - [ ] Deepgram settings:
     - [ ] `deepgram_api_key: str`
     - [ ] `deepgram_api_key_file: Optional[Path]`
@@ -97,34 +99,34 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 - [ ] Implement file reading for Docker secrets:
   - [ ] Create `read_secret_file` method
   - [ ] Add validators for `*_file` fields
-- [ ] Add model_config with env prefix and case sensitivity
-- [ ] Create settings instance singleton pattern
-- [ ] Write tests for Settings class:
-  - [ ] Test env var reading
+- [x] Add model_config with env prefix and case sensitivity
+- [x] Create settings instance singleton pattern
+- [x] Write tests for Settings class:
+  - [x] Test env var reading
   - [ ] Test file secret reading
-  - [ ] Test validation errors
-  - [ ] Test default values
-- [ ] Run tests: `uv run pytest tests/core/test_settings.py -v`
+  - [x] Test validation errors
+  - [x] Test default values
+- [x] Run tests: `uv run pytest tests/core/test_settings.py -v`
 
 ### Day 4: Bot Setup & Webhook
-- [ ] Create `src/main.py`
-- [ ] Add async main function with proper logging setup
-- [ ] Create `src/core/bot.py`:
-  - [ ] Initialize Bot instance with settings
-  - [ ] Initialize Dispatcher
-  - [ ] Create webhook setup function
-  - [ ] Create webhook removal function
-- [ ] Add aiohttp dependency: `uv add aiohttp==3.11.13`
-- [ ] Create `src/core/server.py`:
-  - [ ] Create aiohttp.Application
-  - [ ] Add webhook endpoint `/webhook/{token}`
-  - [ ] Add health check endpoint `/health`
-  - [ ] Add metrics placeholder endpoint `/metrics`
-  - [ ] Implement proper error handling
-- [ ] Create `src/core/middleware.py`:
-  - [ ] Create logging middleware
-  - [ ] Create error handling middleware
-  - [ ] Create request ID middleware
+- [x] Create `src/main.py`
+- [x] Add async main function with proper logging setup
+- [x] Create `src/core/bot.py`:
+  - [x] Initialize Bot instance with settings
+  - [x] Initialize Dispatcher
+  - [x] Create webhook setup function
+  - [x] Create webhook removal function
+- [x] Add aiohttp dependency: `uv add aiohttp==3.11.13`
+- [x] Create `src/core/server.py`:
+  - [x] Create aiohttp.Application
+  - [x] Add webhook endpoint `/webhook/{token}`
+  - [x] Add health check endpoint `/health`
+  - [x] Add metrics placeholder endpoint `/metrics`
+  - [x] Implement proper error handling
+- [x] Create `src/core/middleware.py`:
+  - [x] Create logging middleware
+  - [x] Create error handling middleware
+  - [x] Create request ID middleware
 - [ ] Update main.py:
   - [ ] Start web server on configured ports
   - [ ] Setup webhook on startup
@@ -136,64 +138,64 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [ ] Test health endpoint
 
 ### Day 5: Basic Commands
-- [ ] Create `src/handlers/commands.py`
-- [ ] Create command router using aiogram.Router
-- [ ] Implement `/start` command:
-  - [ ] Create welcome message
+- [x] Create `src/handlers/commands.py`
+- [x] Create command router using aiogram.Router
+- [x] Implement `/start` command:
+  - [x] Create welcome message
   - [ ] Add inline keyboard with "Authorize" button
-  - [ ] Handle user first interaction
-- [ ] Implement `/help` command:
-  - [ ] Create help text with examples
-  - [ ] Format with Markdown
-  - [ ] Include all available commands
-- [ ] Create `src/handlers/__init__.py`:
-  - [ ] Import all routers
+  - [x] Handle user first interaction
+- [x] Implement `/help` command:
+  - [x] Create help text with examples
+  - [x] Format with Markdown
+  - [x] Include all available commands
+- [x] Create `src/handlers/__init__.py`:
+  - [x] Import all routers
   - [ ] Create register_handlers function
-- [ ] Register handlers in main dispatcher
-- [ ] Write tests for commands:
-  - [ ] Mock telegram types
-  - [ ] Test command responses
+- [x] Register handlers in main dispatcher
+- [x] Write tests for commands:
+  - [x] Mock telegram types
+  - [x] Test command responses
   - [ ] Test keyboard generation
 - [ ] Test bot with BotFather token
 
 ## Week 2: AI Integration & Docker
 
 ### Day 6-7: OpenAI & Instructor Setup
-- [ ] Add OpenAI dependencies:
+- [x] Add OpenAI dependencies:
   - [ ] `uv add openai==1.59.4`
-  - [ ] `uv add instructor==1.7.2`
-- [ ] Create `src/services/openai_service.py`:
-  - [ ] Initialize OpenAI client with settings
-  - [ ] Apply instructor patch
-  - [ ] Create parse_task method
-  - [ ] Implement retry logic with exponential backoff
-  - [ ] Add timeout handling
-- [ ] Create `src/models/task.py`:
-  - [ ] Define TaskSchema with Pydantic:
-    - [ ] `content: str` with validation
-    - [ ] `description: Optional[str]`
-    - [ ] `due_string: Optional[str]`
-    - [ ] `priority: Optional[int]` with Field(ge=1, le=4)
-    - [ ] `project_name: Optional[str]`
-    - [ ] `labels: Optional[List[str]]`
-    - [ ] `recurrence: Optional[str]`
-    - [ ] `duration: Optional[int]` (in minutes)
-  - [ ] Add field validators
-  - [ ] Add model examples
-- [ ] Create `src/core/exceptions.py`:
-  - [ ] Define base BotError
-  - [ ] Define OpenAIError
-  - [ ] Define ValidationError
-  - [ ] Define RateLimitError
-- [ ] Implement profanity filter:
-  - [ ] Add better-profanity: `uv add better-profanity==0.7.0`
-  - [ ] Create filter function
-  - [ ] Apply before OpenAI calls
-- [ ] Write comprehensive tests:
-  - [ ] Mock OpenAI responses
-  - [ ] Test retry logic
-  - [ ] Test profanity filter
-  - [ ] Test schema validation
+  - [x] `uv add instructor==1.7.2`
+- [x] Create `src/services/openai_service.py`:
+  - [x] Initialize OpenAI client with settings
+  - [x] Apply instructor patch
+  - [x] Create parse_task method
+  - [x] Implement retry logic with exponential backoff
+  - [x] Add timeout handling
+- [x] Create `src/models/task.py`:
+  - [x] Define TaskSchema with Pydantic:
+    - [x] `content: str` with validation
+    - [x] `description: Optional[str]`
+    - [x] `due_string: Optional[str]`
+    - [x] `priority: Optional[int]` with Field(ge=1, le=4)
+    - [x] `project_name: Optional[str]`
+    - [x] `labels: Optional[List[str]]`
+    - [x] `recurrence: Optional[str]`
+    - [x] `duration: Optional[int]` (in minutes)
+  - [x] Add field validators
+  - [x] Add model examples
+- [x] Create `src/core/exceptions.py`:
+  - [x] Define base BotError
+  - [x] Define OpenAIError
+  - [x] Define ValidationError
+  - [x] Define RateLimitError
+- [x] Implement profanity filter:
+  - [x] Add better-profanity: `uv add better-profanity==0.7.0`
+  - [x] Create filter function
+  - [x] Apply before OpenAI calls
+- [x] Write comprehensive tests:
+  - [x] Mock OpenAI responses
+  - [x] Test retry logic
+  - [x] Test profanity filter
+  - [x] Test schema validation
 
 ### Day 8: Text Message Handler
 - [ ] Create `src/handlers/messages.py`
@@ -322,13 +324,13 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 - [ ] Add httpx: `uv add httpx==0.28.1`
 - [ ] Create `src/services/todoist_service.py`:
   - [ ] Create async HTTP client
-  - [ ] Implement OAuth methods
+  - [ ] Implement Personal Token validation
   - [ ] Implement create_task method
   - [ ] Add get_projects method
   - [ ] Add get_labels method
 - [ ] Create `src/core/rate_limiter.py`:
   - [ ] Implement token bucket algorithm
-  - [ ] 450 requests per 15 minutes
+  - [ ] 450 requests per 15 minutes (conservative limit)
   - [ ] Per-user tracking
   - [ ] Add Redis backend later
 - [ ] Add Todoist exceptions:
@@ -340,53 +342,53 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [ ] Test rate limiting
   - [ ] Test error handling
 
-## Week 4: OAuth & Database
+## Week 4: Database & User Management
 
 ### Day 16-17: Database Setup
-- [ ] Add database dependencies:
-  - [ ] `uv add asyncpg==0.30.0`
-  - [ ] `uv add sqlalchemy==2.0.37`
-  - [ ] `uv add alembic==1.14.0`
-- [ ] Create `src/models/database.py`:
-  - [ ] Define User model:
-    - [ ] id: UUID primary key
+- [x] Add database dependencies:
+  - [x] `uv add asyncpg==0.30.0`
+  - [x] `uv add sqlalchemy==2.0.37`
+  - [x] `uv add alembic==1.14.0`
+- [x] Create `src/models/database.py`:
+  - [x] Define User model:
+    - [x] id: BigInt primary key (using telegram id)
     - [ ] telegram_user_id: BigInt unique
-    - [ ] telegram_username: String optional
-    - [ ] todoist_api_token: Text (encrypted)
-    - [ ] default_project: String optional
-    - [ ] language: String default='en'
-    - [ ] created_at: DateTime
-    - [ ] updated_at: DateTime
+    - [x] telegram_username: String optional
+    - [x] todoist_api_token: Text (encrypted)
+    - [x] default_project: String optional
+    - [x] language: String default='ru'
+    - [x] created_at: DateTime
+    - [x] updated_at: DateTime
     - [ ] is_active: Boolean
-    - [ ] task_count: Integer default=0
-  - [ ] Create database session manager
-  - [ ] Add connection pool config
-- [ ] Create `src/core/encryption.py`:
-  - [ ] Use cryptography library
-  - [ ] Implement encrypt_token method
-  - [ ] Implement decrypt_token method
-  - [ ] Use Fernet symmetric encryption
+    - [x] task_count: Integer default=0
+  - [x] Create database session manager
+  - [x] Add connection pool config
+- [x] Create `src/services/encryption.py`:
+  - [x] Use cryptography library
+  - [x] Implement encrypt method
+  - [x] Implement decrypt method
+  - [x] Use Fernet symmetric encryption
 - [ ] Set up Alembic:
   - [ ] Initialize alembic
   - [ ] Create first migration
   - [ ] Add migration to startup
-- [ ] Create `src/repositories/user_repo.py`:
-  - [ ] Create get_user_by_telegram_id
-  - [ ] Create create_or_update_user
-  - [ ] Create delete_user
-  - [ ] Add transaction handling
+- [x] Create `src/repositories/user.py`:
+  - [x] Create get_by_id
+  - [x] Create create_or_update
+  - [x] Create delete
+  - [x] Add transaction handling
 
 ### Day 18: Personal API Token Setup
-- [ ] Create `/setup` command handler:
-  - [ ] Send instructions with link to Todoist API token page
-  - [ ] Include step-by-step guide with screenshots
-  - [ ] Wait for user to send token
+- [x] Create `/setup` command handler:
+  - [x] Send instructions with link to Todoist API token page
+  - [x] Include step-by-step guide with screenshots
+  - [x] Wait for user to send token
 - [ ] Create token validation:
   - [ ] Test token with Todoist API
   - [ ] Check if token is valid
   - [ ] Return user info and available projects
-- [ ] Update /start command:
-  - [ ] Check if user has token in DB
+- [x] Update /start command:
+  - [x] Check if user has token in DB
   - [ ] If not, redirect to /setup
   - [ ] If yes, show main menu
 - [ ] Create `src/middleware/auth.py`:
@@ -394,8 +396,10 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [ ] Decrypt token if exists
   - [ ] Add to context
   - [ ] Handle unauthorized users
-- [ ] Add token management commands:
-  - [ ] `/setup` - add/update token
+- [x] Add token management commands:
+  - [x] `/setup` - add/update token
+  - [x] `/status` - check connection status
+  - [x] `/cancel` - cancel current operation
   - [ ] `/revoke` - remove token
   - [ ] `/test` - test current token
 - [ ] Test token flow:

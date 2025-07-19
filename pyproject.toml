@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "aiogram==3.21.0",
-    "pydantic==2.10.4", 
+    "pydantic==2.10.4",
     "pydantic-settings==2.7.0",
     "python-dotenv==1.0.1",
     "aiohttp==3.11.13",
@@ -14,11 +14,28 @@ dependencies = [
     "mypy==1.14.1",
     "pytest==8.3.4",
     "pytest-asyncio==0.25.2",
+    "instructor==1.7.2",
+    "better-profanity==0.7.0",
+    "httpx==0.28.1",
+    "redis==5.3.0",
+    "asyncpg==0.30.0",
+    "sqlalchemy==2.0.37",
+    "alembic==1.14.0",
+    "cryptography==43.0.3",
+    "deepgram-sdk==3.10.1",
+    "faster-whisper==1.1.0",
+    "sentry-sdk==2.20.0",
+    "opentelemetry-api==1.29.0",
+    "opentelemetry-sdk==1.29.0",
+    "opentelemetry-instrumentation>=0.50b0",
+    "prometheus-client==0.21.1",
 ]
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "ASYNC"]
 
 [tool.mypy]
@@ -29,6 +46,7 @@ warn_unused_configs = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 
 [dependency-groups]

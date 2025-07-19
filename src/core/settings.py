@@ -1,7 +1,5 @@
 """Application settings configuration using pydantic-settings."""
 
-import asyncio
-from typing import Optional
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,14 +7,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Application configuration settings."""
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
     )
-    
+
     # Telegram Bot Configuration
     telegram_bot_token: SecretStr = Field(
         description="Telegram Bot Token from @BotFather"
@@ -24,11 +22,11 @@ class Settings(BaseSettings):
     telegram_webhook_url: str = Field(
         description="Webhook URL for Telegram (https://yourdomain.com/webhook)"
     )
-    telegram_webhook_secret: Optional[SecretStr] = Field(
+    telegram_webhook_secret: SecretStr | None = Field(
         default=None,
         description="Secret token for webhook validation"
     )
-    
+
     # Server Configuration
     server_host: str = Field(
         default="0.0.0.0",
@@ -46,7 +44,7 @@ class Settings(BaseSettings):
         default="/health",
         description="Health check endpoint path"
     )
-    
+
     # OpenAI Configuration
     openai_api_key: SecretStr = Field(
         description="OpenAI API Key"
@@ -63,20 +61,10 @@ class Settings(BaseSettings):
         default=30,
         description="Timeout for OpenAI requests in seconds"
     )
-    
+
     # Todoist Configuration
-    todoist_personal_token: Optional[SecretStr] = Field(
-        default=None,
-        description="Todoist Personal API Token (primary auth method)"
-    )
-    todoist_client_id: Optional[str] = Field(
-        default=None,
-        description="Todoist OAuth Client ID (future enhancement)"
-    )
-    todoist_client_secret: Optional[SecretStr] = Field(
-        default=None,
-        description="Todoist OAuth Client Secret (future enhancement)"
-    )
+    # Note: Personal tokens are stored per-user in database, not in settings
+    # Users will provide their token via /setup command in Telegram
     todoist_api_endpoint: str = Field(
         default="https://api.todoist.com/api/v1/sync",
         description="Todoist Unified API v1 endpoint"
@@ -93,20 +81,20 @@ class Settings(BaseSettings):
         default=100,
         description="Maximum commands per sync request"
     )
-    
+
     # Deepgram Configuration
     deepgram_api_key: SecretStr = Field(
         description="Deepgram API Key for speech transcription"
     )
     deepgram_model: str = Field(
-        default="nova-2",
+        default="nova-3",
         description="Deepgram model for transcription"
     )
     deepgram_timeout: int = Field(
         default=30,
         description="Timeout for Deepgram requests in seconds"
     )
-    
+
     # Database Configuration
     database_url: str = Field(
         description="PostgreSQL database URL"
@@ -123,7 +111,7 @@ class Settings(BaseSettings):
         default=False,
         description="Enable SQLAlchemy query logging"
     )
-    
+
     # Redis Configuration (for caching and rate limiting)
     redis_url: str = Field(
         default="redis://localhost:6379/0",
@@ -133,7 +121,7 @@ class Settings(BaseSettings):
         default=300,  # 5 minutes
         description="Default cache TTL in seconds"
     )
-    
+
     # Audio Processing Configuration
     max_audio_duration: int = Field(
         default=300,  # 5 minutes
@@ -143,7 +131,7 @@ class Settings(BaseSettings):
         default=20 * 1024 * 1024,  # 20MB
         description="Maximum file size in bytes"
     )
-    
+
     # Security Configuration
     encryption_key: SecretStr = Field(
         description="Key for encrypting user tokens in database"
@@ -151,9 +139,9 @@ class Settings(BaseSettings):
     session_secret: SecretStr = Field(
         description="Secret key for session management"
     )
-    
+
     # Monitoring Configuration
-    sentry_dsn: Optional[str] = Field(
+    sentry_dsn: str | None = Field(
         default=None,
         description="Sentry DSN for error monitoring"
     )
@@ -161,17 +149,17 @@ class Settings(BaseSettings):
         default=0.1,
         description="Sentry traces sample rate"
     )
-    
+
     # OpenTelemetry Configuration
     otel_service_name: str = Field(
         default="tasker-bot",
         description="OpenTelemetry service name"
     )
-    otel_exporter_endpoint: Optional[str] = Field(
+    otel_exporter_endpoint: str | None = Field(
         default=None,
         description="OpenTelemetry exporter endpoint"
     )
-    
+
     # Development Configuration
     debug: bool = Field(
         default=False,
@@ -181,7 +169,7 @@ class Settings(BaseSettings):
         default="INFO",
         description="Logging level"
     )
-    
+
     # Performance Targets
     target_latency_p95: float = Field(
         default=4.0,
@@ -195,49 +183,36 @@ class Settings(BaseSettings):
         default=512,
         description="Target memory usage in MB"
     )
-    
+
     @property
     def telegram_token(self) -> str:
         """Get Telegram bot token as string."""
         return self.telegram_bot_token.get_secret_value()
-    
+
     @property
     def openai_key(self) -> str:
         """Get OpenAI API key as string."""
         return self.openai_api_key.get_secret_value()
-    
+
     @property
     def deepgram_key(self) -> str:
         """Get Deepgram API key as string."""
         return self.deepgram_api_key.get_secret_value()
-    
-    @property
-    def todoist_token(self) -> str:
-        """Get Todoist personal token as string."""
-        if self.todoist_personal_token:
-            return self.todoist_personal_token.get_secret_value()
-        raise ValueError("Todoist personal token not configured")
-    
-    @property
-    def todoist_secret(self) -> str:
-        """Get Todoist client secret as string."""
-        if self.todoist_client_secret:
-            return self.todoist_client_secret.get_secret_value()
-        raise ValueError("Todoist client secret not configured")
-    
+
+
     @property
     def encryption_secret(self) -> str:
         """Get encryption key as string."""
         return self.encryption_key.get_secret_value()
-    
+
     def model_dump_safe(self) -> dict:
         """Dump model without exposing secrets."""
         data = self.model_dump()
         # Remove or mask secret fields
         secret_fields = [
             'telegram_bot_token', 'telegram_webhook_secret',
-            'openai_api_key', 'todoist_personal_token', 'todoist_client_secret',
-            'deepgram_api_key', 'encryption_key', 'session_secret'
+            'openai_api_key', 'deepgram_api_key',
+            'encryption_key', 'session_secret'
         ]
         for field in secret_fields:
             if field in data:
@@ -246,7 +221,7 @@ class Settings(BaseSettings):
 
 
 # Global settings instance
-_settings: Optional[Settings] = None
+_settings: Settings | None = None
 
 
 def get_settings() -> Settings:

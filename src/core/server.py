@@ -1,148 +1,111 @@
-"""Webhook server implementation using aiohttp."""
+"""Web server for webhook handling."""
 
 import logging
-from typing import Any, Dict
 
-from aiohttp import web
-from aiogram import Bot
+from aiogram import Bot, Dispatcher
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
 
-from src.core.settings import get_settings
-from src.core.bot import get_bot_instance
+from src.core.settings import Settings
 
 logger = logging.getLogger(__name__)
 
 
-async def health_check(request: web.Request) -> web.Response:
-    """Health check endpoint."""
-    settings = get_settings()
-    bot_instance = await get_bot_instance()
-    
-    health_data = {
-        "status": "ok",
-        "service": settings.otel_service_name,
-        "version": "0.1.0",
-        "checks": {
-            "bot": "connected" if bot_instance.bot else "disconnected",
-            "redis": "connected" if bot_instance.redis else "not_configured"
-        }
-    }
-    
-    # Check bot connection
-    try:
-        me = await bot_instance.bot.get_me()
-        health_data["bot_username"] = me.username
-    except Exception as e:
-        health_data["status"] = "unhealthy"
-        health_data["checks"]["bot"] = f"error: {str(e)}"
-        return web.json_response(health_data, status=503)
-    
-    return web.json_response(health_data)
+class WebhookServer:
+    """Webhook server for handling Telegram updates."""
 
+    def __init__(
+        self,
+        bot: Bot,
+        dispatcher: Dispatcher,
+        settings: Settings
+    ) -> None:
+        """Initialize webhook server.
 
-async def webhook_handler(request: web.Request) -> web.Response:
-    """Handle webhook requests with secret validation."""
-    settings = get_settings()
-    
-    # Validate webhook secret if configured
-    if settings.telegram_webhook_secret:
-        secret_header = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-        expected_secret = settings.telegram_webhook_secret.get_secret_value()
-        
-        if secret_header != expected_secret:
-            logger.warning("Invalid webhook secret received")
-            return web.Response(status=401, text="Unauthorized")
-    
-    # Process webhook will be handled by aiogram
-    return web.Response(status=200)
+        Args:
+            bot: Bot instance
+            dispatcher: Dispatcher instance
+            settings: Application settings
+        """
+        self.bot = bot
+        self.dispatcher = dispatcher
+        self.settings = settings
+        self.app = web.Application()
 
+        # Set up webhook handler
+        webhook_path = f"{self.settings.webhook_path}/{self.settings.telegram_token}"
+        webhook_handler = SimpleRequestHandler(
+            dispatcher=self.dispatcher,
+            bot=self.bot
+        )
+        webhook_handler.register(self.app, path=webhook_path)
+        setup_application(self.app, self.dispatcher, bot=self.bot)
 
-async def on_startup(app: web.Application) -> None:
-    """Application startup handler."""
-    settings = get_settings()
-    bot_instance = await get_bot_instance()
-    
-    # Set webhook
-    webhook_url = f"{settings.telegram_webhook_url}{settings.webhook_path}"
-    
-    await bot_instance.bot.set_webhook(
-        url=webhook_url,
-        secret_token=settings.telegram_webhook_secret.get_secret_value() if settings.telegram_webhook_secret else None,
-        drop_pending_updates=True,  # Don't process messages sent while bot was offline
-        allowed_updates=[
-            "message",
-            "edited_message",
-            "callback_query",
-            "inline_query"
-        ]
-    )
-    
-    logger.info(f"Webhook set to: {webhook_url}")
+        # Add health check endpoint
+        self.app.router.add_get(self.settings.health_check_path, self.health_check)
 
+        # Add metrics endpoint placeholder
+        self.app.router.add_get("/metrics", self.metrics)
 
-async def on_shutdown(app: web.Application) -> None:
-    """Application shutdown handler."""
-    bot_instance = await get_bot_instance()
-    
-    # Delete webhook
-    await bot_instance.bot.delete_webhook(drop_pending_updates=True)
-    
-    # Close bot instance
-    await bot_instance.close()
-    
-    logger.info("Application shutdown completed")
+        logger.info(f"Webhook server configured on {webhook_path}")
 
+    async def health_check(self, request: web.Request) -> web.Response:
+        """Health check endpoint."""
+        try:
+            # Check bot connection
+            bot_info = await self.bot.get_me()
 
-async def create_app() -> web.Application:
-    """Create aiohttp application with webhook handler."""
-    settings = get_settings()
-    bot_instance = await get_bot_instance()
-    
-    # Create aiohttp app
-    app = web.Application()
-    
-    # Setup routes
-    app.router.add_get(settings.health_check_path, health_check)
-    
-    # Setup aiogram webhook handler
-    webhook_requests_handler = SimpleRequestHandler(
-        dispatcher=bot_instance.dispatcher,
-        bot=bot_instance.bot
-    )
-    webhook_requests_handler.register(app, path=settings.webhook_path)
-    
-    # Setup lifecycle handlers
-    app.on_startup.append(on_startup)
-    app.on_shutdown.append(on_shutdown)
-    
-    # Setup aiogram application
-    setup_application(app, bot_instance.dispatcher, bot=bot_instance.bot)
-    
-    return app
+            # Check Redis connection if available
+            redis_status = "unknown"
+            if hasattr(self.dispatcher.storage, "_redis"):
+                try:
+                    await self.dispatcher.storage._redis.ping()
+                    redis_status = "ok"
+                except Exception:
+                    redis_status = "error"
 
+            return web.json_response({
+                "status": "healthy",
+                "bot": {
+                    "username": bot_info.username,
+                    "id": bot_info.id
+                },
+                "redis": redis_status
+            })
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return web.json_response(
+                {"status": "unhealthy", "error": str(e)},
+                status=503
+            )
 
-def run_webhook_server() -> None:
-    """Run webhook server."""
-    settings = get_settings()
-    
-    # Configure logging
-    logging.basicConfig(
-        level=getattr(logging, settings.log_level),
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    )
-    
-    # Create and run app
-    app = create_app()
-    
-    logger.info(f"Starting webhook server on {settings.server_host}:{settings.server_port}")
-    
-    web.run_app(
-        app,
-        host=settings.server_host,
-        port=settings.server_port,
-        access_log_format='%a "%r" %s %b "%{User-Agent}i" %Tf'
-    )
+    async def metrics(self, request: web.Request) -> web.Response:
+        """Metrics endpoint for Prometheus."""
+        # TODO: Implement actual metrics collection
+        return web.Response(
+            text="# HELP taskerbot_up Bot status\n"
+                 "# TYPE taskerbot_up gauge\n"
+                 "taskerbot_up 1\n",
+            content_type="text/plain"
+        )
 
+    def get_app(self) -> web.Application:
+        """Get aiohttp application."""
+        return self.app
 
-if __name__ == "__main__":
-    run_webhook_server()
+    async def start(self) -> None:
+        """Start webhook server."""
+        runner = web.AppRunner(self.app)
+        await runner.setup()
+
+        site = web.TCPSite(
+            runner,
+            self.settings.server_host,
+            self.settings.server_port
+        )
+
+        await site.start()
+        logger.info(
+            f"Webhook server started on "
+            f"{self.settings.server_host}:{self.settings.server_port}"
+        )

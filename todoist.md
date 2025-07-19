@@ -36,18 +36,15 @@ Rate Limit: 1000 requests / 15 минут / пользователь
 
 ## Аутентификация
 
-### Personal Token (рекомендуется для команды агентства)
+### Personal Token (единственный метод аутентификации)
 
-1. Заходи в Todoist → Settings → Integrations
-2. Копируй Personal Token
-3. Используй в заголовке: `Authorization: Bearer YOUR_TOKEN`
+1. Каждый пользователь заходит в Todoist → Settings → Integrations
+2. Копирует Personal Token
+3. Вводит токен в боте через команду /setup
+4. Токен шифруется и сохраняется в базе данных
+5. Используется в заголовке: `Authorization: Bearer USER_TOKEN`
 
-### OAuth (для внешних пользователей)
-
-Если понадобится OAuth для клиентов:
-1. Создай приложение в [Todoist Developer Console](https://developer.todoist.com/appconsole.html)
-2. Получи Client ID и Client Secret
-3. Реализуй OAuth flow
+**Важно**: Мы НЕ используем OAuth! Только Personal Tokens, которые каждый пользователь вводит сам.
 
 ---
 

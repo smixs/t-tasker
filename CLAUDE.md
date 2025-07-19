@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 4. Never skip tasks - they have dependencies
 
 ## Project Context
-Production-ready Telegram bot converting text/voice/video to Todoist tasks with <4s latency, OAuth multi-user support, 99.8% uptime.
+Production-ready Telegram bot converting text/voice/video to Todoist tasks with <4s latency, multi-user support via personal tokens, 99.8% uptime.
 
 ## Architecture Rules
 - **Python 3.12** with **uv** package manager (NEVER use pip)
@@ -58,7 +58,8 @@ Production-ready Telegram bot converting text/voice/video to Todoist tasks with 
 ### Todoist API
 - Rate limit: 450 requests/15 minutes
 - Cache projects/labels/plans (5min TTL)
-- Use OAuth 2.0, never store plain tokens
+- Each user provides their Personal Token via /setup command
+- Tokens are encrypted and stored per-user in database
 - Always validate project_name exists before creating tasks
 
 ### Speech Recognition
@@ -91,7 +92,7 @@ Production-ready Telegram bot converting text/voice/video to Todoist tasks with 
 - [ ] Text message processing
 - [ ] Voice/audio transcription
 - [ ] Todoist API client
-- [ ] OAuth 2.0 flow
+- [ ] /setup command for Personal Token input
 - [ ] Database models
 - [ ] Error handling
 - [ ] Monitoring (Sentry, OTEL, Prometheus)
@@ -134,3 +135,6 @@ ngrok http 8443              # Expose webhook for Telegram
 - Todoist API doesn't support batch operations
 - OpenAI structured outputs may fail on complex inputs
 - Database migrations not yet implemented
+
+## Development Best Practices
+- Если ты в чем-то сомневаешься, всегда используй context7 mcp
