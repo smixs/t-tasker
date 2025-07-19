@@ -1,5 +1,6 @@
 """Tests for Todoist service."""
 
+import asyncio
 import json
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -29,14 +30,16 @@ class TestTodoistService:
 
     async def test_validate_token_success(self, todoist_service, mock_httpx_client):
         """Test successful token validation."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "email": "test@example.com",
             "full_name": "Test User",
             "id": "123456",
         }
-        mock_httpx_client.get.return_value = mock_response
+        mock_httpx_client.get = AsyncMock(return_value=mock_response)
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             result = await todoist_service.validate_token()
@@ -50,9 +53,11 @@ class TestTodoistService:
 
     async def test_validate_token_invalid(self, todoist_service, mock_httpx_client):
         """Test token validation with invalid token."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 401
-        mock_httpx_client.get.return_value = mock_response
+        mock_httpx_client.get = AsyncMock(return_value=mock_response)
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             with pytest.raises(InvalidTokenError):
@@ -60,9 +65,11 @@ class TestTodoistService:
 
     async def test_validate_token_quota_exceeded(self, todoist_service, mock_httpx_client):
         """Test token validation with quota exceeded."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 403
-        mock_httpx_client.get.return_value = mock_response
+        mock_httpx_client.get = AsyncMock(return_value=mock_response)
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             with pytest.raises(QuotaExceededError):
@@ -70,7 +77,7 @@ class TestTodoistService:
 
     async def test_create_task_success(self, todoist_service, mock_httpx_client):
         """Test successful task creation."""
-        mock_response = MagicMock()
+        mock_response = AsyncMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
             "id": "2995104339",
@@ -79,7 +86,9 @@ class TestTodoistService:
             "priority": 4,
             "labels": ["test"],
         }
-        mock_httpx_client.post.return_value = mock_response
+        mock_httpx_client.post = AsyncMock(return_value=mock_response)
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             with patch.object(todoist_service._rate_limiter, "acquire", new_callable=AsyncMock):
@@ -208,7 +217,9 @@ class TestTodoistService:
 
     async def test_network_error_handling(self, todoist_service, mock_httpx_client):
         """Test network error handling."""
-        mock_httpx_client.get.side_effect = httpx.RequestError("Network error")
+        mock_httpx_client.get = AsyncMock(side_effect=httpx.RequestError("Network error"))
+        mock_httpx_client.__aenter__ = AsyncMock(return_value=mock_httpx_client)
+        mock_httpx_client.__aexit__ = AsyncMock(return_value=None)
 
         with patch.object(todoist_service, "_get_client", return_value=mock_httpx_client):
             with pytest.raises(TodoistError) as exc_info:

@@ -6,9 +6,9 @@ from aiogram import Bot, F, Router
 from aiogram.types import Message
 
 from src.core.database import get_database
-from src.core.exceptions import BotError, UnauthorizedError
+from src.core.exceptions import BotError
+from src.models.db import User
 from src.repositories.user import UserRepository
-from src.services.encryption import EncryptionService
 from src.services.openai_service import OpenAIService
 from src.services.todoist_service import TodoistService
 from src.utils.formatters import (
@@ -24,8 +24,17 @@ message_router = Router(name="messages")
 
 
 @message_router.message(F.text)
-async def handle_text_message(message: Message, bot: Bot) -> None:
-    """Handle text messages."""
+async def handle_text_message(
+    message: Message, 
+    bot: Bot,
+    user: "User",  # Injected by auth middleware
+    todoist_token: str  # Injected by auth middleware
+) -> None:
+    """Handle text messages.
+    
+    Note: This handler requires auth middleware to be registered.
+    The user and todoist_token are injected by the middleware.
+    """
     if not message.from_user or not message.text:
         return
 
@@ -39,34 +48,12 @@ async def handle_text_message(message: Message, bot: Bot) -> None:
     processing_msg = await message.answer(format_processing_message())
 
     try:
-        # Get user from database
-        db = get_database()
-        async with db.get_session() as session:
-            user_repo = UserRepository(session)
-            
-            # Ensure user exists
-            user = await user_repo.create_or_update(
-                user_id=user_id,
-                username=message.from_user.username,
-                first_name=message.from_user.first_name,
-                last_name=message.from_user.last_name,
-                language_code=message.from_user.language_code
-            )
-            
-            # Check if user has Todoist token
-            if not user.todoist_token_encrypted:
-                raise UnauthorizedError()
-            
-            # Decrypt token
-            encryption = EncryptionService()
-            todoist_token = encryption.decrypt(user.todoist_token_encrypted)
-            
-            # Parse task with OpenAI
-            openai_service = OpenAIService()
-            task = await openai_service.parse_task(message.text)
-            
-            # Create task in Todoist
-            async with TodoistService(todoist_token) as todoist:
+        # Parse task with OpenAI
+        openai_service = OpenAIService()
+        task = await openai_service.parse_task(message.text)
+        
+        # Create task in Todoist
+        async with TodoistService(todoist_token) as todoist:
                 # Check if project exists
                 if task.project_name:
                     project = await todoist.get_project_by_name(task.project_name)
@@ -86,7 +73,10 @@ async def handle_text_message(message: Message, bot: Bot) -> None:
                 )
             
             # Increment task counter
-            await user_repo.increment_tasks_count(user_id)
+            db = get_database()
+            async with db.get_session() as session:
+                user_repo = UserRepository(session)
+                await user_repo.increment_tasks_count(user_id)
             
             # Delete processing message
             await processing_msg.delete()

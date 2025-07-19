@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 import httpx
 
 from src.core.exceptions import InvalidTokenError, QuotaExceededError, RateLimitError, TodoistError
-from src.core.settings import settings
+from src.core.settings import get_settings
 
 logger = logging.getLogger(__name__)
 

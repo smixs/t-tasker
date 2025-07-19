@@ -14,6 +14,7 @@ from src.core.middleware import (
     RateLimitMiddleware,
     UserContextMiddleware,
 )
+from src.middleware.auth import AuthMiddleware
 from src.core.server import WebhookServer
 from src.core.settings import get_settings
 from src.handlers import command_router, error_router, message_router
@@ -57,9 +58,10 @@ class Application:
         dp.include_router(command_router)
         dp.include_router(message_router)
         
-        # Register middleware
+        # Register middleware (order matters - auth should be after user context)
         dp.message.middleware(RateLimitMiddleware())
         dp.message.middleware(UserContextMiddleware())
+        dp.message.middleware(AuthMiddleware())
         dp.message.middleware(ErrorHandlingMiddleware())
         dp.message.middleware(LoggingMiddleware())
         
