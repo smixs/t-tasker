@@ -19,31 +19,6 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr = Field(
         description="Telegram Bot Token from @BotFather"
     )
-    telegram_webhook_url: str = Field(
-        description="Webhook URL for Telegram (https://yourdomain.com/webhook)"
-    )
-    telegram_webhook_secret: SecretStr | None = Field(
-        default=None,
-        description="Secret token for webhook validation"
-    )
-
-    # Server Configuration
-    server_host: str = Field(
-        default="0.0.0.0",
-        description="Server host"
-    )
-    server_port: int = Field(
-        default=8443,
-        description="Server port for webhook"
-    )
-    webhook_path: str = Field(
-        default="/webhook",
-        description="Webhook endpoint path"
-    )
-    health_check_path: str = Field(
-        default="/health",
-        description="Health check endpoint path"
-    )
 
     # OpenAI Configuration
     openai_api_key: SecretStr = Field(
@@ -210,7 +185,7 @@ class Settings(BaseSettings):
         data = self.model_dump()
         # Remove or mask secret fields
         secret_fields = [
-            'telegram_bot_token', 'telegram_webhook_secret',
+            'telegram_bot_token',
             'openai_api_key', 'deepgram_api_key',
             'encryption_key', 'session_secret'
         ]

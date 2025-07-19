@@ -1,11 +1,16 @@
-"""Main application entry point."""
+"""Main application entry point with polling mode."""
 
 import asyncio
 import logging
 import signal
 import sys
 
-from src.core.bot import BotInstance
+from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.redis import RedisStorage
+from redis.asyncio import Redis
+
 from src.core.database import get_database
 from src.core.middleware import (
     ErrorHandlingMiddleware,
@@ -13,7 +18,6 @@ from src.core.middleware import (
     RateLimitMiddleware,
     UserContextMiddleware,
 )
-from src.core.server import WebhookServer
 from src.core.settings import get_settings
 from src.handlers import callback_router, command_router, error_router, message_router
 from src.middleware.auth import AuthMiddleware
@@ -36,90 +40,104 @@ class Application:
     def __init__(self) -> None:
         """Initialize application."""
         self.settings = get_settings()
-        self.bot_instance = BotInstance()
+        self.bot: Bot | None = None
+        self.dispatcher: Dispatcher | None = None
         self.database = get_database()
-        self.server: WebhookServer | None = None
+        self.redis: Redis | None = None
         self._shutdown_event = asyncio.Event()
 
     async def setup(self) -> None:
         """Setup application components."""
         logger.info("Setting up application...")
-
+        
         # Initialize database
         await self.database.create_tables()
-
-        # Setup bot
-        await self.bot_instance.setup()
-
-        # Register routers
-        dp = self.bot_instance.dispatcher
-        dp.include_router(error_router)
-        dp.include_router(command_router)
-        dp.include_router(message_router)
-        dp.include_router(callback_router)
-
-        # Register middleware (order matters - auth should be after user context)
-        dp.message.middleware(RateLimitMiddleware())
-        dp.message.middleware(UserContextMiddleware())
-        dp.message.middleware(AuthMiddleware())
-        dp.message.middleware(ErrorHandlingMiddleware())
-        dp.message.middleware(LoggingMiddleware())
-
-        # Setup webhook
-        await self.bot_instance.setup_webhook()
-
-        # Create webhook server
-        self.server = WebhookServer(
-            bot=self.bot_instance.bot,
-            dispatcher=self.bot_instance.dispatcher,
-            webhook_path=self.settings.webhook_path,
-            webhook_secret=self.settings.webhook_secret,
-            host=self.settings.webhook_host,
-            port=self.settings.webhook_port
+        
+        # Setup Redis
+        self.redis = Redis.from_url(
+            self.settings.redis_url,
+            decode_responses=True
         )
-
+        
+        # Create bot
+        self.bot = Bot(
+            token=self.settings.telegram_token,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        )
+        
+        # Create dispatcher with Redis storage
+        self.dispatcher = Dispatcher(
+            storage=RedisStorage(self.redis)
+        )
+        
+        # Register routers
+        self.dispatcher.include_router(error_router)
+        self.dispatcher.include_router(command_router)
+        self.dispatcher.include_router(message_router)
+        self.dispatcher.include_router(callback_router)
+        
+        # Register middleware (order matters - auth should be after user context)
+        self.dispatcher.message.middleware(RateLimitMiddleware())
+        self.dispatcher.message.middleware(UserContextMiddleware())
+        self.dispatcher.message.middleware(AuthMiddleware())
+        self.dispatcher.message.middleware(ErrorHandlingMiddleware())
+        self.dispatcher.message.middleware(LoggingMiddleware())
+        
+        # Delete webhook if exists
+        await self.bot.delete_webhook(drop_pending_updates=True)
+        
         logger.info("Application setup complete")
 
     async def start(self) -> None:
         """Start the application."""
         logger.info("Starting application...")
-
+        
         # Setup signal handlers
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda s, f: asyncio.create_task(self.shutdown()))
-
-        # Start webhook server
-        if self.server:
-            await self.server.start()
-            logger.info(f"Webhook server started on {self.settings.webhook_host}:{self.settings.webhook_port}")
-
+        
+        # Get bot info
+        bot_info = await self.bot.get_me()
+        logger.info(f"Bot @{bot_info.username} is starting in polling mode")
+        
+        # Start polling
+        try:
+            await self.dispatcher.start_polling(self.bot)
+        except asyncio.CancelledError:
+            logger.info("Polling cancelled")
+        
         # Wait for shutdown
         await self._shutdown_event.wait()
 
     async def shutdown(self) -> None:
         """Shutdown the application gracefully."""
         logger.info("Shutting down application...")
-
-        # Stop webhook server
-        if self.server:
-            await self.server.stop()
-
-        # Close bot
-        await self.bot_instance.close()
-
+        
+        # Stop polling
+        if self.dispatcher:
+            await self.dispatcher.stop_polling()
+        
+        # Close bot session
+        if self.bot:
+            await self.bot.session.close()
+        
+        # Close Redis
+        if self.redis:
+            await self.redis.close()
+        
         # Close database
         await self.database.close()
-
+        
         # Set shutdown event
         self._shutdown_event.set()
-
+        
         logger.info("Application shutdown complete")
 
 
 async def main() -> None:
     """Main entry point."""
     app = Application()
-
+    
     try:
         await app.setup()
         await app.start()
