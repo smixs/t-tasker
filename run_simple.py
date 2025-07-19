@@ -15,6 +15,13 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 from src.core.settings import get_settings
 from src.core.database import get_database
+from src.core.middleware import (
+    ErrorHandlingMiddleware,
+    LoggingMiddleware,
+    RateLimitMiddleware,
+    UserContextMiddleware,
+)
+from src.middleware.auth import AuthMiddleware
 from src.handlers import command_router, error_router, message_router
 
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +45,13 @@ async def main():
     dp.include_router(error_router)
     dp.include_router(command_router)
     dp.include_router(message_router)
+    
+    # Регистрируем middleware
+    dp.message.middleware(RateLimitMiddleware())
+    dp.message.middleware(UserContextMiddleware())
+    dp.message.middleware(AuthMiddleware())
+    dp.message.middleware(ErrorHandlingMiddleware())
+    dp.message.middleware(LoggingMiddleware())
     
     # База данных
     db = get_database()

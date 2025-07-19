@@ -72,18 +72,18 @@ async def handle_text_message(
                     duration=task.duration,
                 )
             
-            # Increment task counter
-            db = get_database()
-            async with db.get_session() as session:
-                user_repo = UserRepository(session)
-                await user_repo.increment_tasks_count(user_id)
-            
-            # Delete processing message
-            await processing_msg.delete()
-            
-            # Send success message
-            response = task_to_telegram_html(task, todoist_task)
-            await message.answer(response, parse_mode="HTML")
+        # Increment task counter
+        db = get_database()
+        async with db.get_session() as session:
+            user_repo = UserRepository(session)
+            await user_repo.increment_tasks_count(user_id)
+        
+        # Delete processing message
+        await processing_msg.delete()
+        
+        # Send success message
+        response = task_to_telegram_html(task, todoist_task)
+        await message.answer(response, parse_mode="HTML")
             
     except BotError as e:
         logger.warning(f"Bot error for user {user_id}: {e}")
