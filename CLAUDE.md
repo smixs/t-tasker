@@ -85,18 +85,20 @@ Production-ready Telegram bot converting text/voice/video to Todoist tasks with 
 7. Docker image must be ≤120MB
 
 ## Current Implementation Status
-- [ ] Basic bot structure with webhook
-- [ ] Settings management with pydantic-settings
-- [ ] Command handlers (/start, /help)
-- [ ] OpenAI integration for task parsing
-- [ ] Text message processing
-- [ ] Voice/audio transcription
-- [ ] Todoist API client
-- [ ] /setup command for Personal Token input
-- [ ] Database models
-- [ ] Error handling
+- [x] Basic bot structure with webhook and polling mode
+- [x] Settings management with pydantic-settings
+- [x] Command handlers (/start, /help, /setup, /undo, /recent, /autodelete)
+- [x] OpenAI integration for task parsing (Instructor with Mode.TOOLS)
+- [x] Text message processing
+- [x] Voice/audio transcription (Deepgram Nova-3 with Russian support)
+- [x] Todoist API client with rate limiting
+- [x] /setup command for Personal Token input with encryption
+- [x] Database models (PostgreSQL + asyncpg)
+- [x] Error handling and middleware
+- [x] Callback handlers for inline keyboard buttons
+- [x] Auto-delete previous task feature
 - [ ] Monitoring (Sentry, OTEL, Prometheus)
-- [ ] Docker setup
+- [x] Docker setup with multi-stage build
 - [ ] CI/CD pipeline
 
 ## Environment Variables
@@ -152,3 +154,21 @@ ngrok http 8443              # Expose webhook for Telegram
 2. Проверить MIME type: "audio/ogg;codecs=opus"
 3. Включить detect_language=true
 4. Проверить логи Deepgram response
+
+## Recent Fixes (2025-01-19)
+
+### Callback Handlers Fixed
+- **Problem**: Кнопки под задачами выдавали ошибку `missing 2 required positional arguments: 'user' and 'todoist_token'`
+- **Solution**: AuthMiddleware теперь обрабатывает CallbackQuery events (src/middleware/auth.py:47-49)
+- **Result**: Все кнопки (Готово, Удалить) работают корректно
+
+### Auto-delete Feature Added
+- **Command**: `/autodelete` - включает/выключает автоудаление предыдущей задачи
+- **Database**: Добавлено поле `auto_delete_previous` в модель User
+- **Logic**: При создании новой задачи проверяется настройка и удаляется предыдущая
+- **Works for**: Текстовые и голосовые сообщения
+
+### Docker Build Process
+- **Important**: Используй `make docker-build` для обновления кода
+- **Wrong**: `make docker-restart` только перезапускает контейнер со старым кодом
+- **After DB changes**: Всегда перезапускай бота после миграций

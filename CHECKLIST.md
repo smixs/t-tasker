@@ -5,14 +5,16 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 ## Quick Stats
 - Total tasks: ~150
 - Estimated time: 6 weeks
-- Current progress: ~75% (Core functionality complete!)
-- Last updated: 2025-01-19 (Voice transcription working!)
+- Current progress: ~80% (Callback handlers fixed, auto-delete added!)
+- Last updated: 2025-01-19 (Fixed buttons, added auto-delete feature)
 - Test coverage: 84% (51 tests passing + Deepgram tests ready)
 - Core functionality: ✅ Text → Task pipeline working
 - Voice functionality: ✅ Voice → Text → Task pipeline working
 - Auth flow: ✅ /setup command with token storage working
 - Todoist integration: ✅ Full API client with rate limiting
 - Deepgram integration: ✅ Voice transcription with auto language detection
+- Callback handlers: ✅ All inline keyboard buttons working
+- Auto-delete: ✅ /autodelete command for automatic task cleanup
 
 ## Week 1: Project Setup & Basic Bot Structure
 
@@ -857,6 +859,30 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 - Clear, explicit user actions only
 - Fast and predictable behavior
 
+## Callback Handlers & Auto-delete Feature (2025-01-19)
+
+### Fixed Callback Handler Issues
+- [x] AuthMiddleware now processes CallbackQuery events
+- [x] Added CallbackQuery support to UserContextMiddleware
+- [x] Registered middleware for callback_query in main.py
+- [x] All inline keyboard buttons now work correctly
+- [x] Tested "Complete" and "Delete" buttons functionality
+
+### Auto-delete Previous Task Feature
+- [x] Added `auto_delete_previous` field to User model (boolean, default=False)
+- [x] Created SQL migration for database update
+- [x] Implemented `/autodelete` command to toggle the feature
+- [x] Updated text message handler with auto-deletion logic
+- [x] Updated voice message handler with auto-deletion logic
+- [x] Added UserRepository.update() method for settings persistence
+- [x] Updated `/help` command to include new feature
+
+### Docker & Deployment Updates
+- [x] Learned to use `make docker-build` (not just restart!)
+- [x] Applied SQL migrations after container rebuild
+- [x] Verified code updates in running containers
+- [x] Pushed all changes to GitHub
+
 ## Known Issues & Limitations
 
 1. **Webhook Mode** - Not tested, requires HTTPS domain
@@ -864,6 +890,7 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 3. **Rate Limiting** - In-memory only, needs Redis backend
 4. **Video/Audio Files** - Not implemented yet
 5. **Token Validation** - No automatic check if token is valid
+6. **Edit Task Button** - Shows "not implemented" message (placeholder)
 
 ## Performance Metrics (Current)
 - Voice transcription: 3-4 seconds
