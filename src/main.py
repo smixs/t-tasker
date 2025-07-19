@@ -4,7 +4,6 @@ import asyncio
 import logging
 import signal
 import sys
-from typing import Any
 
 from src.core.bot import BotInstance
 from src.core.database import get_database
@@ -14,10 +13,10 @@ from src.core.middleware import (
     RateLimitMiddleware,
     UserContextMiddleware,
 )
-from src.middleware.auth import AuthMiddleware
 from src.core.server import WebhookServer
 from src.core.settings import get_settings
-from src.handlers import command_router, error_router, message_router
+from src.handlers import callback_router, command_router, error_router, message_router
+from src.middleware.auth import AuthMiddleware
 
 # Configure logging
 logging.basicConfig(
@@ -45,29 +44,30 @@ class Application:
     async def setup(self) -> None:
         """Setup application components."""
         logger.info("Setting up application...")
-        
+
         # Initialize database
         await self.database.create_tables()
-        
+
         # Setup bot
         await self.bot_instance.setup()
-        
+
         # Register routers
         dp = self.bot_instance.dispatcher
         dp.include_router(error_router)
         dp.include_router(command_router)
         dp.include_router(message_router)
-        
+        dp.include_router(callback_router)
+
         # Register middleware (order matters - auth should be after user context)
         dp.message.middleware(RateLimitMiddleware())
         dp.message.middleware(UserContextMiddleware())
         dp.message.middleware(AuthMiddleware())
         dp.message.middleware(ErrorHandlingMiddleware())
         dp.message.middleware(LoggingMiddleware())
-        
+
         # Setup webhook
         await self.bot_instance.setup_webhook()
-        
+
         # Create webhook server
         self.server = WebhookServer(
             bot=self.bot_instance.bot,
@@ -77,49 +77,49 @@ class Application:
             host=self.settings.webhook_host,
             port=self.settings.webhook_port
         )
-        
+
         logger.info("Application setup complete")
 
     async def start(self) -> None:
         """Start the application."""
         logger.info("Starting application...")
-        
+
         # Setup signal handlers
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda s, f: asyncio.create_task(self.shutdown()))
-        
+
         # Start webhook server
         if self.server:
             await self.server.start()
             logger.info(f"Webhook server started on {self.settings.webhook_host}:{self.settings.webhook_port}")
-        
+
         # Wait for shutdown
         await self._shutdown_event.wait()
 
     async def shutdown(self) -> None:
         """Shutdown the application gracefully."""
         logger.info("Shutting down application...")
-        
+
         # Stop webhook server
         if self.server:
             await self.server.stop()
-        
+
         # Close bot
         await self.bot_instance.close()
-        
+
         # Close database
         await self.database.close()
-        
+
         # Set shutdown event
         self._shutdown_event.set()
-        
+
         logger.info("Application shutdown complete")
 
 
 async def main() -> None:
     """Main entry point."""
     app = Application()
-    
+
     try:
         await app.setup()
         await app.start()

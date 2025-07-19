@@ -57,7 +57,7 @@ class UserRepository:
             User object
         """
         user = await self.get_by_id(user_id)
-        
+
         if user:
             # Update existing user
             if username is not None:
@@ -68,7 +68,7 @@ class UserRepository:
                 user.last_name = last_name
             if language_code is not None:
                 user.language_code = language_code
-            
+
             logger.info(f"Updated user {user_id}")
         else:
             # Create new user
@@ -81,7 +81,7 @@ class UserRepository:
             )
             self.session.add(user)
             logger.info(f"Created new user {user_id}")
-        
+
         await self.session.commit()
         return user
 
@@ -99,7 +99,7 @@ class UserRepository:
         if not user:
             logger.error(f"User {user_id} not found")
             return False
-        
+
         user.todoist_token_encrypted = encrypted_token
         await self.session.commit()
         logger.info(f"Updated Todoist token for user {user_id}")
@@ -141,7 +141,7 @@ class UserRepository:
         user = await self.get_by_id(user_id)
         if not user:
             return False
-        
+
         await self.session.delete(user)
         await self.session.commit()
         logger.info(f"Deleted user {user_id}")

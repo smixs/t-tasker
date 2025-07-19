@@ -1,12 +1,14 @@
 """Message formatters for Telegram responses."""
 
-from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any
 
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+from src.models.db import Task
 from src.models.task import TaskSchema
 
 
-def task_to_telegram_html(task: TaskSchema, todoist_task: Optional[Dict[str, Any]] = None) -> str:
+def task_to_telegram_html(task: TaskSchema, todoist_task: dict[str, Any] | None = None) -> str:
     """Format task for Telegram HTML response.
 
     Args:
@@ -17,36 +19,36 @@ def task_to_telegram_html(task: TaskSchema, todoist_task: Optional[Dict[str, Any
         Formatted HTML message
     """
     lines = ["✅ <b>Задача создана!</b>\n"]
-    
+
     # Task content
     lines.append(f"📝 <b>{escape_html(task.content)}</b>")
-    
+
     # Description
     if task.description:
         lines.append(f"📄 {escape_html(task.description)}")
-    
+
     # Project
     if task.project_name:
         lines.append(f"📁 Проект: <i>{escape_html(task.project_name)}</i>")
-    
+
     # Due date
     if task.due_string:
         lines.append(f"📅 Срок: {escape_html(task.due_string)}")
-    
+
     # Priority
     if task.priority and task.priority > 1:
         priority_emoji = get_priority_emoji(task.priority)
         lines.append(f"{priority_emoji} Приоритет: {task.priority}")
-    
+
     # Labels
     if task.labels:
         labels_str = ", ".join(f"#{escape_html(label)}" for label in task.labels)
         lines.append(f"🏷 Метки: {labels_str}")
-    
+
     # Recurrence
     if task.recurrence:
         lines.append(f"🔄 Повтор: {escape_html(task.recurrence)}")
-    
+
     # Duration
     if task.duration:
         hours = task.duration // 60
@@ -56,11 +58,11 @@ def task_to_telegram_html(task: TaskSchema, todoist_task: Optional[Dict[str, Any
         else:
             duration_str = f"{minutes}м"
         lines.append(f"⏱ Длительность: {duration_str}")
-    
+
     # Add Todoist link if available
     if todoist_task and "url" in todoist_task:
         lines.append(f"\n🔗 <a href='{todoist_task['url']}'>Открыть в Todoist</a>")
-    
+
     return "\n".join(lines)
 
 
@@ -76,7 +78,7 @@ def format_error_message(error: Exception) -> str:
     # Check if it's one of our custom exceptions with user_message
     if hasattr(error, "user_message"):
         return f"❌ {error.user_message}"
-    
+
     # Generic error
     return "❌ Произошла ошибка при обработке вашего запроса. Попробуйте еще раз."
 
@@ -91,12 +93,12 @@ def format_task_preview(task: TaskSchema) -> str:
         Formatted preview message
     """
     lines = ["🔍 <b>Распознанная задача:</b>\n"]
-    
+
     lines.append(f"<b>{escape_html(task.content)}</b>")
-    
+
     if task.description:
         lines.append(f"<i>{escape_html(task.description)}</i>")
-    
+
     details = []
     if task.project_name:
         details.append(f"📁 {task.project_name}")
@@ -104,10 +106,10 @@ def format_task_preview(task: TaskSchema) -> str:
         details.append(f"📅 {task.due_string}")
     if task.priority and task.priority > 1:
         details.append(f"{get_priority_emoji(task.priority)} P{task.priority}")
-    
+
     if details:
         lines.append("\n" + " • ".join(details))
-    
+
     return "\n".join(lines)
 
 
@@ -130,17 +132,17 @@ def format_quota_status(used: int, limit: int) -> str:
     bar_length = 10
     filled = int(bar_length * percentage / 100)
     bar = "█" * filled + "░" * (bar_length - filled)
-    
+
     lines = [
         "<b>📊 Статус квоты Todoist</b>\n",
         f"{bar} {percentage:.0f}%",
         f"Использовано: {used} / {limit} запросов",
         f"Осталось: {limit - used} запросов",
     ]
-    
+
     if percentage > 80:
         lines.append("\n⚠️ <i>Приближаетесь к лимиту!</i>")
-    
+
     return "\n".join(lines)
 
 
@@ -178,3 +180,71 @@ def get_priority_emoji(priority: int) -> str:
         4: "🔴",  # Urgent
     }
     return emojis.get(priority, "⚪")
+
+
+def create_task_keyboard(task_id: int, todoist_id: str) -> InlineKeyboardMarkup:
+    """Create inline keyboard for task management.
+
+    Args:
+        task_id: Database task ID
+        todoist_id: Todoist task ID
+
+    Returns:
+        Inline keyboard markup
+    """
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="❌ Удалить",
+                callback_data=f"delete_task:{task_id}:{todoist_id}"
+            ),
+            InlineKeyboardButton(
+                text="✅ Готово",
+                callback_data=f"complete_task:{task_id}:{todoist_id}"
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="✏️ Изменить",
+                callback_data=f"edit_task:{task_id}:{todoist_id}"
+            ),
+        ]
+    ]
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def create_recent_tasks_keyboard(tasks: list[Task]) -> InlineKeyboardMarkup:
+    """Create inline keyboard for recent tasks list.
+
+    Args:
+        tasks: List of task objects
+
+    Returns:
+        Inline keyboard markup
+    """
+    buttons = []
+
+    for task in tasks:
+        # Create row with task content and action buttons
+        row = [
+            InlineKeyboardButton(
+                text=f"❌ {task.task_content[:20]}..." if len(task.task_content) > 20 else f"❌ {task.task_content}",
+                callback_data=f"delete_task:{task.id}:{task.todoist_id}"
+            ),
+            InlineKeyboardButton(
+                text="✅",
+                callback_data=f"complete_task:{task.id}:{task.todoist_id}"
+            ),
+        ]
+        buttons.append(row)
+
+    # Add refresh button
+    buttons.append([
+        InlineKeyboardButton(
+            text="🔄 Обновить",
+            callback_data="refresh_recent_tasks"
+        )
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)

@@ -1,15 +1,13 @@
 """Todoist API service for task management."""
 
 import asyncio
-import json
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 
 from src.core.exceptions import InvalidTokenError, QuotaExceededError, RateLimitError, TodoistError
-from src.core.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +29,11 @@ class TodoistService:
             "Authorization": f"Bearer {api_token}",
             "Content-Type": "application/json",
         }
-        self._client: Optional[httpx.AsyncClient] = None
+        self._client: httpx.AsyncClient | None = None
         self._rate_limiter = RateLimiter(max_requests=450, window_seconds=900)  # 450 req/15 min
-        self._projects_cache: Optional[List[Dict[str, Any]]] = None
-        self._labels_cache: Optional[List[Dict[str, Any]]] = None
-        self._cache_expiry: Optional[datetime] = None
+        self._projects_cache: list[dict[str, Any]] | None = None
+        self._labels_cache: list[dict[str, Any]] | None = None
+        self._cache_expiry: datetime | None = None
 
     async def __aenter__(self) -> "TodoistService":
         """Async context manager entry."""
@@ -47,7 +45,7 @@ class TodoistService:
         if self._client:
             await self._client.aclose()
 
-    async def validate_token(self) -> Dict[str, Any]:
+    async def validate_token(self) -> dict[str, Any]:
         """Validate the API token and return user info.
 
         Returns:
@@ -63,14 +61,14 @@ class TodoistService:
                     f"{self.SYNC_URL}/user",
                     headers=self.headers,
                 )
-                
+
                 if response.status_code == 401:
                     raise InvalidTokenError()
                 elif response.status_code == 403:
                     raise QuotaExceededError()
                 elif response.status_code != 200:
                     raise TodoistError(f"API error: {response.status_code}")
-                
+
                 return response.json()
         except httpx.RequestError as e:
             logger.error(f"Network error validating token: {e}")
@@ -79,18 +77,18 @@ class TodoistService:
     async def create_task(
         self,
         content: str,
-        description: Optional[str] = None,
-        project_id: Optional[str] = None,
-        section_id: Optional[str] = None,
-        parent_id: Optional[str] = None,
-        labels: Optional[List[str]] = None,
+        description: str | None = None,
+        project_id: str | None = None,
+        section_id: str | None = None,
+        parent_id: str | None = None,
+        labels: list[str] | None = None,
         priority: int = 1,
-        due_string: Optional[str] = None,
-        due_date: Optional[str] = None,
-        due_datetime: Optional[str] = None,
-        duration: Optional[int] = None,
-        duration_unit: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        due_string: str | None = None,
+        due_date: str | None = None,
+        due_datetime: str | None = None,
+        duration: int | None = None,
+        duration_unit: str | None = None,
+    ) -> dict[str, Any]:
         """Create a new task in Todoist.
 
         Args:
@@ -148,7 +146,7 @@ class TodoistService:
                     headers=self.headers,
                     json=task_data,
                 )
-                
+
                 if response.status_code == 401:
                     raise InvalidTokenError()
                 elif response.status_code == 403:
@@ -159,13 +157,13 @@ class TodoistService:
                 elif response.status_code != 200:
                     error_data = response.json() if response.content else {}
                     raise TodoistError(f"Failed to create task: {error_data}")
-                
+
                 return response.json()
         except httpx.RequestError as e:
             logger.error(f"Network error creating task: {e}")
             raise TodoistError(f"Network error: {str(e)}")
 
-    async def get_projects(self) -> List[Dict[str, Any]]:
+    async def get_projects(self) -> list[dict[str, Any]]:
         """Get all projects with caching.
 
         Returns:
@@ -185,14 +183,14 @@ class TodoistService:
                     f"{self.BASE_URL}/projects",
                     headers=self.headers,
                 )
-                
+
                 if response.status_code == 401:
                     raise InvalidTokenError()
                 elif response.status_code == 403:
                     raise QuotaExceededError()
                 elif response.status_code != 200:
                     raise TodoistError(f"Failed to get projects: {response.status_code}")
-                
+
                 self._projects_cache = response.json()
                 self._update_cache_expiry()
                 return self._projects_cache
@@ -200,7 +198,7 @@ class TodoistService:
             logger.error(f"Network error getting projects: {e}")
             raise TodoistError(f"Network error: {str(e)}")
 
-    async def get_labels(self) -> List[Dict[str, Any]]:
+    async def get_labels(self) -> list[dict[str, Any]]:
         """Get all labels with caching.
 
         Returns:
@@ -220,14 +218,14 @@ class TodoistService:
                     f"{self.BASE_URL}/labels",
                     headers=self.headers,
                 )
-                
+
                 if response.status_code == 401:
                     raise InvalidTokenError()
                 elif response.status_code == 403:
                     raise QuotaExceededError()
                 elif response.status_code != 200:
                     raise TodoistError(f"Failed to get labels: {response.status_code}")
-                
+
                 self._labels_cache = response.json()
                 self._update_cache_expiry()
                 return self._labels_cache
@@ -235,7 +233,7 @@ class TodoistService:
             logger.error(f"Network error getting labels: {e}")
             raise TodoistError(f"Network error: {str(e)}")
 
-    async def get_project_by_name(self, name: str) -> Optional[Dict[str, Any]]:
+    async def get_project_by_name(self, name: str) -> dict[str, Any] | None:
         """Get project by name.
 
         Args:
@@ -249,6 +247,88 @@ class TodoistService:
             if project["name"].lower() == name.lower():
                 return project
         return None
+
+    async def delete_task(self, task_id: str) -> bool:
+        """Delete a task from Todoist.
+
+        Args:
+            task_id: Todoist task ID
+
+        Returns:
+            True if deleted successfully, False otherwise
+
+        Raises:
+            RateLimitError: If rate limit exceeded
+            TodoistError: For other API errors
+        """
+        await self._rate_limiter.acquire()
+
+        try:
+            async with self._get_client() as client:
+                response = await client.delete(
+                    f"{self.BASE_URL}/tasks/{task_id}",
+                    headers=self.headers,
+                )
+
+                if response.status_code == 204:  # No content - success
+                    return True
+                elif response.status_code == 404:
+                    logger.warning(f"Task {task_id} not found in Todoist")
+                    return False
+                elif response.status_code == 401:
+                    raise InvalidTokenError()
+                elif response.status_code == 403:
+                    raise QuotaExceededError()
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", "60"))
+                    raise RateLimitError(retry_after=retry_after)
+                else:
+                    error_data = response.json() if response.content else {}
+                    raise TodoistError(f"Failed to delete task: {error_data}")
+        except httpx.RequestError as e:
+            logger.error(f"Network error deleting task: {e}")
+            raise TodoistError(f"Network error: {str(e)}")
+
+    async def complete_task(self, task_id: str) -> bool:
+        """Mark a task as completed in Todoist.
+
+        Args:
+            task_id: Todoist task ID
+
+        Returns:
+            True if completed successfully, False otherwise
+
+        Raises:
+            RateLimitError: If rate limit exceeded
+            TodoistError: For other API errors
+        """
+        await self._rate_limiter.acquire()
+
+        try:
+            async with self._get_client() as client:
+                response = await client.post(
+                    f"{self.BASE_URL}/tasks/{task_id}/close",
+                    headers=self.headers,
+                )
+
+                if response.status_code == 204:  # No content - success
+                    return True
+                elif response.status_code == 404:
+                    logger.warning(f"Task {task_id} not found in Todoist")
+                    return False
+                elif response.status_code == 401:
+                    raise InvalidTokenError()
+                elif response.status_code == 403:
+                    raise QuotaExceededError()
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", "60"))
+                    raise RateLimitError(retry_after=retry_after)
+                else:
+                    error_data = response.json() if response.content else {}
+                    raise TodoistError(f"Failed to complete task: {error_data}")
+        except httpx.RequestError as e:
+            logger.error(f"Network error completing task: {e}")
+            raise TodoistError(f"Network error: {str(e)}")
 
     def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client.
@@ -287,7 +367,7 @@ class RateLimiter:
         """
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.requests: List[datetime] = []
+        self.requests: list[datetime] = []
         self._lock = asyncio.Lock()
 
     async def acquire(self) -> None:
@@ -299,14 +379,14 @@ class RateLimiter:
         async with self._lock:
             now = datetime.now()
             cutoff = now - timedelta(seconds=self.window_seconds)
-            
+
             # Remove old requests outside the window
             self.requests = [req_time for req_time in self.requests if req_time > cutoff]
-            
+
             if len(self.requests) >= self.max_requests:
                 # Calculate when the oldest request will expire
                 oldest = min(self.requests)
                 wait_time = int((oldest + timedelta(seconds=self.window_seconds) - now).total_seconds())
                 raise RateLimitError(retry_after=wait_time)
-            
+
             self.requests.append(now)

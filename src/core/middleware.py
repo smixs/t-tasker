@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import Message, TelegramObject, Update
+from aiogram.types import Message, TelegramObject
 
 from src.core.exceptions import BotError
 

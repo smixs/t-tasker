@@ -1,8 +1,8 @@
 """Database connection and session management."""
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -22,7 +22,7 @@ class Database:
             settings: Application settings
         """
         self.settings = settings or get_settings()
-        
+
         # Create engine
         self.engine: AsyncEngine = create_async_engine(
             self.settings.database_url,
@@ -31,32 +31,32 @@ class Database:
             max_overflow=self.settings.database_max_overflow,
             pool_pre_ping=True
         )
-        
+
         # Create session factory
         self.async_session = sessionmaker(
             self.engine,
             class_=AsyncSession,
             expire_on_commit=False
         )
-        
+
         logger.info("Database initialized")
 
     async def create_tables(self) -> None:
         """Create all tables."""
         from src.models.db import Base
-        
+
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        
+
         logger.info("Database tables created")
 
     async def drop_tables(self) -> None:
         """Drop all tables."""
         from src.models.db import Base
-        
+
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
-        
+
         logger.warning("Database tables dropped")
 
     @asynccontextmanager

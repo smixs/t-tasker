@@ -1,7 +1,6 @@
 """Deepgram transcription service for voice messages."""
 
 import logging
-from typing import Optional
 
 import httpx
 
@@ -49,7 +48,7 @@ class DeepgramService:
         # Debug logging
         logger.info(f"Audio size: {len(audio_bytes)} bytes")
         logger.debug(f"First 100 bytes: {audio_bytes[:100].hex()}")
-        
+
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(
@@ -66,10 +65,10 @@ class DeepgramService:
 
                 result = response.json()
                 logger.debug(f"Deepgram response: {result}")
-                
+
                 # Extract transcript from response
                 transcript = self._extract_transcript(result)
-                
+
                 if not transcript:
                     logger.warning(f"Empty transcript received from Deepgram. Response: {result}")
                     raise TranscriptionError("Empty transcript")
@@ -87,7 +86,7 @@ class DeepgramService:
             logger.error(f"Unexpected error in Deepgram transcription: {e}")
             raise TranscriptionError(f"Unexpected error: {str(e)}")
 
-    def _extract_transcript(self, result: dict) -> Optional[str]:
+    def _extract_transcript(self, result: dict) -> str | None:
         """Extract transcript text from Deepgram response.
 
         Args:

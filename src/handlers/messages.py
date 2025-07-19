@@ -8,11 +8,13 @@ from aiogram.types import Message
 from src.core.database import get_database
 from src.core.exceptions import BotError, TranscriptionError
 from src.models.db import User
+from src.repositories.task import TaskRepository
 from src.repositories.user import UserRepository
 from src.services.deepgram_service import DeepgramService
 from src.services.openai_service import OpenAIService
 from src.services.todoist_service import TodoistService
 from src.utils.formatters import (
+    create_task_keyboard,
     format_error_message,
     format_processing_message,
     task_to_telegram_html,
@@ -26,7 +28,7 @@ message_router = Router(name="messages")
 
 @message_router.message(F.text)
 async def handle_text_message(
-    message: Message, 
+    message: Message,
     bot: Bot,
     user: "User",  # Injected by auth middleware
     todoist_token: str  # Injected by auth middleware
@@ -44,7 +46,7 @@ async def handle_text_message(
 
     # Send typing action
     await bot.send_chat_action(message.chat.id, "typing")
-    
+
     # Send processing message
     processing_msg = await message.answer(format_processing_message())
 
@@ -52,7 +54,7 @@ async def handle_text_message(
         # Parse task with OpenAI
         openai_service = OpenAIService()
         task = await openai_service.parse_task(message.text)
-        
+
         # Create task in Todoist
         async with TodoistService(todoist_token) as todoist:
                 # Check if project exists
@@ -61,7 +63,7 @@ async def handle_text_message(
                     project_id = project["id"] if project else None
                 else:
                     project_id = None
-                
+
                 # Create the task
                 todoist_task = await todoist.create_task(
                     content=task.content,
@@ -72,20 +74,31 @@ async def handle_text_message(
                     due_string=task.due_string,
                     duration=task.duration,
                 )
-            
-        # Increment task counter
+
+        # Save task to database
         db = get_database()
         async with db.get_session() as session:
+            task_repo = TaskRepository(session)
+            created_task = await task_repo.create(
+                user_id=user_id,
+                message_text=message.text,
+                message_type="text",
+                task_schema=task,
+                todoist_id=todoist_task["id"],
+                todoist_url=todoist_task.get("url")
+            )
+
             user_repo = UserRepository(session)
             await user_repo.increment_tasks_count(user_id)
-        
+
         # Delete processing message
         await processing_msg.delete()
-        
-        # Send success message
+
+        # Send success message with inline keyboard
         response = task_to_telegram_html(task, todoist_task)
-        await message.answer(response, parse_mode="HTML")
-            
+        keyboard = create_task_keyboard(created_task.id, todoist_task["id"])
+        await message.answer(response, parse_mode="HTML", reply_markup=keyboard)
+
     except BotError as e:
         logger.warning(f"Bot error for user {user_id}: {e}")
         await processing_msg.delete()
@@ -98,7 +111,7 @@ async def handle_text_message(
 
 @message_router.message(F.voice)
 async def handle_voice_message(
-    message: Message, 
+    message: Message,
     bot: Bot,
     user: "User",
     todoist_token: str
@@ -120,7 +133,7 @@ async def handle_voice_message(
 
     # Send typing action
     await bot.send_chat_action(message.chat.id, "typing")
-    
+
     # Send processing message
     processing_msg = await message.answer("🎤 Распознаю голосовое сообщение...")
 
@@ -129,27 +142,27 @@ async def handle_voice_message(
         file = await bot.get_file(message.voice.file_id)
         if not file.file_path:
             raise TranscriptionError("No file path in response")
-            
+
         audio_io = await bot.download_file(file.file_path)
         if not audio_io:
             raise TranscriptionError("Failed to download audio")
-            
+
         audio_bytes = audio_io.read()
-        
+
         # Transcribe with Deepgram
         deepgram = DeepgramService()
         text = await deepgram.transcribe(audio_bytes, mime_type="audio/ogg;codecs=opus")
-        
+
         # Update message with transcribed text
         await processing_msg.edit_text(
             f"📝 Распознано: {text}\n\n"
             "⏳ Создаю задачу..."
         )
-        
+
         # Process transcribed text through OpenAI
         openai_service = OpenAIService()
         task = await openai_service.parse_task(text)
-        
+
         # Create task in Todoist
         async with TodoistService(todoist_token) as todoist:
             if task.project_name:
@@ -157,7 +170,7 @@ async def handle_voice_message(
                 project_id = project["id"] if project else None
             else:
                 project_id = None
-            
+
             todoist_task = await todoist.create_task(
                 content=task.content,
                 description=task.description,
@@ -167,20 +180,31 @@ async def handle_voice_message(
                 due_string=task.due_string,
                 duration=task.duration,
             )
-        
-        # Increment task counter
+
+        # Save task to database
         db = get_database()
         async with db.get_session() as session:
+            task_repo = TaskRepository(session)
+            created_task = await task_repo.create(
+                user_id=user_id,
+                message_text=text,  # Распознанный текст из голосового сообщения
+                message_type="voice",
+                task_schema=task,
+                todoist_id=todoist_task["id"],
+                todoist_url=todoist_task.get("url")
+            )
+
             user_repo = UserRepository(session)
             await user_repo.increment_tasks_count(user_id)
-        
+
         # Delete processing message
         await processing_msg.delete()
-        
-        # Send success message
+
+        # Send success message with inline keyboard
         response = task_to_telegram_html(task, todoist_task)
-        await message.answer(response, parse_mode="HTML")
-        
+        keyboard = create_task_keyboard(created_task.id, todoist_task["id"])
+        await message.answer(response, parse_mode="HTML", reply_markup=keyboard)
+
     except TranscriptionError as e:
         logger.warning(f"Transcription error for user {user_id}: {e}")
         await processing_msg.delete()

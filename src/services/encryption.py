@@ -22,7 +22,7 @@ class EncryptionService:
             settings: Application settings
         """
         self.settings = settings or get_settings()
-        
+
         # Generate key from secret
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
@@ -33,7 +33,7 @@ class EncryptionService:
         key = base64.urlsafe_b64encode(
             kdf.derive(self.settings.session_secret.get_secret_value().encode())
         )
-        
+
         self.cipher = Fernet(key)
         logger.info("Encryption service initialized")
 
@@ -48,7 +48,7 @@ class EncryptionService:
         """
         if not data:
             return ""
-        
+
         try:
             encrypted = self.cipher.encrypt(data.encode())
             return base64.urlsafe_b64encode(encrypted).decode()
@@ -67,7 +67,7 @@ class EncryptionService:
         """
         if not encrypted_data:
             return ""
-        
+
         try:
             decoded = base64.urlsafe_b64decode(encrypted_data.encode())
             decrypted = self.cipher.decrypt(decoded)

@@ -789,6 +789,74 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
 - Proper error handling and logging
 - FSM for token setup flow
 
+## Task Management Features (NEW - 2025-01-19)
+
+### Delete/Undo Functionality
+- [x] Add delete_task method to TodoistService
+  - [x] DELETE /tasks/{task_id} endpoint
+  - [x] Handle 404 errors gracefully
+  - [x] Return success/failure status
+- [x] Add complete_task method to TodoistService
+  - [x] POST /tasks/{task_id}/close endpoint
+  - [x] Handle already completed tasks
+- [x] Extend TaskRepository:
+  - [x] get_last_task(user_id) - return latest task with todoist_id
+  - [x] get_recent_tasks(user_id, limit=5) - for /recent command
+  - [x] delete_task_record(task_id) - mark as deleted in DB
+- [x] Update create_task to save todoist_id in Task record:
+  - [x] Pass todoist_task["id"] to repository
+  - [x] Ensure foreign key relationship works
+
+### Inline Keyboard Support
+- [x] Create keyboard builder in formatters.py:
+  - [x] create_task_keyboard(task_id) - returns InlineKeyboardMarkup
+  - [x] Buttons: ❌ Delete, ✅ Complete, ✏️ Edit
+- [x] Update task_to_telegram_html to include keyboard
+- [x] Create src/handlers/callbacks.py:
+  - [x] Router for callback queries
+  - [x] handle_delete_task callback
+  - [x] handle_complete_task callback
+  - [x] handle_edit_task callback (placeholder)
+  - [x] Send confirmation messages
+
+### New Commands
+- [x] Implement /undo command:
+  - [x] Get last task from repository
+  - [x] Delete from Todoist
+  - [x] Mark as deleted in DB
+  - [x] Send confirmation
+- [x] Implement /recent command:
+  - [x] Get last 5 tasks with todoist_id
+  - [x] Format as list with inline buttons
+  - [x] Handle pagination if needed
+
+### Voice Command Recognition (CANCELLED - Keep It Simple)
+- ~~Update OpenAI prompt to detect delete commands~~
+- ~~Add is_delete_command field to TaskSchema~~
+- ~~Detect phrases: "удали предыдущую", "отмени задачу"~~
+- ~~Handle delete commands in message handlers~~
+
+**Decision**: Voice command recognition for deletion was cancelled to keep the bot simple and predictable. Users should use /undo command or inline buttons for task management.
+
+### Testing
+- [ ] Test Todoist API delete/complete endpoints
+- [ ] Test inline keyboard callbacks
+- [ ] Test /undo and /recent commands
+- [ ] Test error scenarios (task not found, etc.)
+
+### Summary of Implemented Features
+✅ **Basic Task Management Completed:**
+- Any message (text/voice) creates a task
+- Inline buttons under each created task (Delete, Complete, Edit)
+- `/undo` command to delete the last task
+- `/recent` command to view and manage recent tasks
+- All operations work with both Todoist API and local database
+
+✅ **Design Decision:**
+- Kept it simple - no AI command detection
+- Clear, explicit user actions only
+- Fast and predictable behavior
+
 ## Known Issues & Limitations
 
 1. **Webhook Mode** - Not tested, requires HTTPS domain

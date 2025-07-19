@@ -8,9 +8,14 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from src.core.database import get_database
+from src.core.exceptions import BotError
 from src.handlers.states import SetupStates
+from src.models.db import User
+from src.repositories.task import TaskRepository
 from src.repositories.user import UserRepository
 from src.services.encryption import get_encryption_service
+from src.services.todoist_service import TodoistService
+from src.utils.formatters import format_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +28,7 @@ async def cmd_start(message: Message) -> None:
     """Handle /start command."""
     if not message.from_user:
         return
-    
+
     # Create or update user in database
     async with get_database().get_session() as session:
         user_repo = UserRepository(session)
@@ -34,7 +39,7 @@ async def cmd_start(message: Message) -> None:
             last_name=message.from_user.last_name,
             language_code=message.from_user.language_code
         )
-    
+
     await message.answer(
         "👋 Привет! Я помогу превратить ваши сообщения в задачи Todoist.\n\n"
         "Что я умею:\n"
@@ -61,6 +66,8 @@ async def cmd_help(message: Message) -> None:
         "/start - Начать работу\n"
         "/setup - Подключить Todoist\n"
         "/status - Проверить статус подключения\n"
+        "/undo - Удалить последнюю задачу\n"
+        "/recent - Показать последние 5 задач\n"
         "/help - Эта справка\n"
         "/cancel - Отменить текущую операцию",
         parse_mode="Markdown"
@@ -71,7 +78,7 @@ async def cmd_help(message: Message) -> None:
 async def cmd_setup(message: Message, state: FSMContext) -> None:
     """Handle /setup command - start token setup."""
     await state.set_state(SetupStates.waiting_for_token)
-    
+
     await message.answer(
         "🔐 **Настройка подключения к Todoist**\n\n"
         "Для подключения мне нужен ваш Personal API Token:\n\n"
@@ -91,9 +98,9 @@ async def process_token(message: Message, state: FSMContext) -> None:
     if not message.text or not message.from_user:
         await message.answer("❌ Пожалуйста, отправьте токен текстом.")
         return
-    
+
     token = message.text.strip()
-    
+
     # Basic validation
     if len(token) < 20 or len(token) > 100:
         await message.answer(
@@ -101,22 +108,22 @@ async def process_token(message: Message, state: FSMContext) -> None:
             "Попробуйте еще раз или используйте /cancel для отмены."
         )
         return
-    
+
     # Delete message with token for security
     await message.delete()
-    
+
     # Encrypt and save token
     try:
         encryption = get_encryption_service()
         encrypted_token = encryption.encrypt(token)
-        
+
         async with get_database().get_session() as session:
             user_repo = UserRepository(session)
             success = await user_repo.update_todoist_token(
                 user_id=message.from_user.id,
                 encrypted_token=encrypted_token
             )
-        
+
         if success:
             await message.answer(
                 "✅ Токен успешно сохранен!\n\n"
@@ -140,11 +147,11 @@ async def cmd_status(message: Message) -> None:
     """Check connection status."""
     if not message.from_user:
         return
-    
+
     async with get_database().get_session() as session:
         user_repo = UserRepository(session)
         user = await user_repo.get_by_id(message.from_user.id)
-    
+
     if not user or not user.todoist_token_encrypted:
         await message.answer(
             "❌ Todoist не подключен.\n"
@@ -163,9 +170,103 @@ async def cmd_status(message: Message) -> None:
 async def cmd_cancel(message: Message, state: FSMContext) -> None:
     """Cancel current operation."""
     current_state = await state.get_state()
-    
+
     if current_state is None:
         await message.answer("Нет активных операций для отмены.")
     else:
         await state.clear()
         await message.answer("❌ Операция отменена.")
+
+
+@command_router.message(Command("undo"))
+async def handle_undo(
+    message: Message,
+    user: "User",
+    todoist_token: str
+) -> None:
+    """Handle /undo command - delete last created task."""
+    if not message.from_user:
+        return
+
+    user_id = message.from_user.id
+    logger.info(f"User {user_id} requested undo")
+
+    # Get last task from database
+    db = get_database()
+    async with db.get_session() as session:
+        task_repo = TaskRepository(session)
+        last_task = await task_repo.get_last_task(user_id)
+
+        if not last_task:
+            await message.answer("❌ У вас нет задач для удаления.")
+            return
+
+        # Delete from Todoist
+        try:
+            async with TodoistService(todoist_token) as todoist:
+                success = await todoist.delete_task(last_task.todoist_id)
+
+                if success:
+                    # Delete from database
+                    await task_repo.delete_task_record(last_task.id)
+
+                    await message.answer(
+                        f"✅ Задача удалена:\n\n"
+                        f"📝 <b>{last_task.task_content}</b>\n"
+                        f"🗓 {last_task.task_due or 'Без срока'}",
+                        parse_mode="HTML"
+                    )
+                else:
+                    await message.answer(
+                        "❌ Не удалось удалить задачу.\n"
+                        "Возможно, она уже была удалена в Todoist."
+                    )
+        except BotError as e:
+            logger.warning(f"Bot error deleting task: {e}")
+            await message.answer(format_error_message(e))
+        except Exception as e:
+            logger.error(f"Unexpected error deleting task: {e}", exc_info=True)
+            await message.answer("❌ Произошла ошибка при удалении задачи.")
+
+
+@command_router.message(Command("recent"))
+async def handle_recent(
+    message: Message,
+    user: "User"
+) -> None:
+    """Handle /recent command - show recent tasks with action buttons."""
+    if not message.from_user:
+        return
+
+    user_id = message.from_user.id
+    logger.info(f"User {user_id} requested recent tasks")
+
+    # Get recent tasks
+    db = get_database()
+    async with db.get_session() as session:
+        task_repo = TaskRepository(session)
+        recent_tasks = await task_repo.get_recent_tasks(user_id, limit=5)
+
+        if not recent_tasks:
+            await message.answer("📋 У вас пока нет созданных задач.")
+            return
+
+        # Format tasks list
+        text = "📋 <b>Последние задачи:</b>\n\n"
+
+        for i, task in enumerate(recent_tasks, 1):
+            text += (
+                f"{i}. <b>{task.task_content}</b>\n"
+                f"   🗓 {task.task_due or 'Без срока'}\n"
+                f"   🏷 {task.task_labels or 'Без меток'}\n\n"
+            )
+
+        # Create inline keyboard with task management buttons
+        from src.utils.formatters import create_recent_tasks_keyboard
+        keyboard = create_recent_tasks_keyboard(recent_tasks)
+
+        await message.answer(
+            text,
+            parse_mode="HTML",
+            reply_markup=keyboard
+        )
