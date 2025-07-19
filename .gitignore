@@ -93,3 +93,6 @@ data/
 cache/
 media/
 static/
+
+# Development docs (local only)
+CLAUDE.md
