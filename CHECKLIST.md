@@ -635,6 +635,88 @@ This checklist contains detailed micro-tasks for developing the TaskerBot projec
   - [ ] Backups configured
   - [ ] Incident response plan
 
+## Week 7: Voice Command Management (Natural Language Control)
+
+### Цель
+Реализовать голосовое управление задачами через естественный язык вместо текстовых команд. Пользователь сможет говорить "удали последнюю задачу" вместо `/undo`.
+
+### Архитектурное решение
+Использовать Discriminated Union pattern с Instructor для классификации намерений (Intent).
+
+### Day 1: Intent Models & Planning
+- [x] Обновить CHECKLIST.md с полным планом реализации
+- [x] Создать файл `src/models/intent.py`
+- [x] Определить базовые модели:
+  - [x] `TaskCreation` с полем `type: Literal["create_task"]`
+  - [x] `CommandExecution` с полями для типа команды и параметров
+  - [x] Union тип `Intent = Union[TaskCreation, CommandExecution]`
+- [x] Написать тесты для моделей Intent
+- [x] Определить все поддерживаемые команды:
+  - [x] view_tasks (показать задачи)
+  - [x] delete_task (удалить задачу)
+  - [x] update_task (изменить задачу)
+  - [x] complete_task (выполнить задачу)
+
+### Day 2: OpenAI Service Extension
+- [x] Добавить метод `parse_intent()` в OpenAIService
+- [x] Создать system prompt для классификации намерений
+- [x] Добавить примеры для каждого типа намерения
+- [x] Написать unit тесты для parse_intent (8 тестов)
+- [ ] Протестировать с реальными примерами команд
+- [ ] Оптимизировать промпт для точности классификации
+
+### Day 3: Todoist API Extensions
+- [x] Добавить в TodoistService метод `get_tasks(filter_string)`
+- [x] Добавить метод `get_recent_tasks(limit=10)`
+- [x] Добавить метод `reopen_task(task_id)`
+- [x] Реализовать поддержку фильтров: today, tomorrow, overdue, p1-p4
+- [x] Написать тесты для новых методов (10 тестов)
+
+### Day 4: Command Executor
+- [x] Создать `src/services/command_executor.py`
+- [x] Реализовать базовый класс CommandExecutor
+- [x] Реализовать методы:
+  - [x] `_view_tasks()` - форматированный вывод задач
+  - [x] `_delete_task()` - удаление с подтверждением
+  - [x] `_update_task()` - обновление параметров
+  - [x] `_complete_task()` - отметка выполнения
+- [x] Добавить форматирование ответов для Telegram
+- [x] Написать тесты для CommandExecutor (12 тестов)
+
+### Day 5: Integration & Message Handlers
+- [ ] Модифицировать `handle_text_message()` для поддержки Intent
+- [ ] Модифицировать `handle_voice_message()` аналогично
+- [ ] Добавить маршрутизацию на основе типа Intent
+- [ ] Сохранить обратную совместимость
+- [ ] Добавить обработку ошибок классификации
+
+### Day 6: Testing & Documentation
+- [ ] Написать integration тесты для полного flow
+- [ ] Протестировать edge cases:
+  - [ ] Неоднозначные команды
+  - [ ] Смешанные намерения
+  - [ ] Команды на разных языках
+- [ ] Обновить /help с примерами голосовых команд
+- [ ] Добавить примеры в README.md
+
+### Примеры команд для тестирования
+```
+СОЗДАНИЕ ЗАДАЧ:
+- "Купить молоко завтра"
+- "Встреча с клиентом в 15:00"
+- "Напомни позвонить маме"
+
+КОМАНДЫ УПРАВЛЕНИЯ:
+- "Покажи все задачи на сегодня"
+- "Что у меня запланировано на завтра?"
+- "Удали последнюю задачу"
+- "Убери предыдущую задачу"
+- "Измени приоритет последней задачи на высокий"
+- "Сделай последнюю задачу срочной"
+- "Отметь последнюю задачу выполненной"
+- "Перенеси последнюю задачу на завтра"
+```
+
 ## Completed Improvements (2025-01-19)
 
 ### Deepgram Integration Fix

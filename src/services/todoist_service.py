@@ -382,6 +382,125 @@ class TodoistService:
             logger.error(f"Network error completing task: {e}")
             raise TodoistError(f"Network error: {str(e)}")
 
+    async def get_tasks(
+        self,
+        filter_string: str | None = None,
+        project_id: str | None = None,
+        limit: int = 30
+    ) -> list[dict[str, Any]]:
+        """Get tasks with optional filtering.
+
+        Args:
+            filter_string: Todoist filter string (e.g., "today", "overdue", "p1")
+            project_id: Optional project ID to filter by
+            limit: Maximum number of tasks to return
+
+        Returns:
+            List of task dictionaries
+
+        Raises:
+            TodoistError: For API errors
+        """
+        await self._rate_limiter.acquire()
+
+        params: dict[str, Any] = {}
+        if filter_string:
+            params["filter"] = filter_string
+        if project_id:
+            params["project_id"] = project_id
+
+        try:
+            async with self._get_client() as client:
+                # Get all tasks (up to 300 by default in Todoist API)
+                response = await client.get(
+                    f"{self.BASE_URL}/tasks",
+                    headers=self.headers,
+                    params=params,
+                )
+
+                if response.status_code == 401:
+                    raise InvalidTokenError()
+                elif response.status_code == 403:
+                    raise QuotaExceededError()
+                elif response.status_code != 200:
+                    raise TodoistError(f"Failed to get tasks: {response.status_code}")
+
+                tasks = response.json()
+                
+                # Apply client-side filtering if needed
+                if filter_string and filter_string not in ["today", "tomorrow", "overdue"]:
+                    # For filters like "p1", "p2", etc., we need to filter manually
+                    if filter_string.startswith("p"):
+                        try:
+                            priority = int(filter_string[1])
+                            tasks = [t for t in tasks if t.get("priority", 1) == priority]
+                        except (ValueError, IndexError):
+                            pass
+                
+                # Sort by created date (newest first) and limit
+                tasks.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+                return tasks[:limit]
+
+        except httpx.RequestError as e:
+            logger.error(f"Network error getting tasks: {e}")
+            raise TodoistError(f"Network error: {str(e)}")
+
+    async def get_recent_tasks(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Get recently created tasks.
+
+        Args:
+            limit: Maximum number of tasks to return
+
+        Returns:
+            List of task dictionaries sorted by creation date (newest first)
+
+        Raises:
+            TodoistError: For API errors
+        """
+        # Use get_tasks without filter to get all tasks, then sort by created date
+        tasks = await self.get_tasks(limit=limit)
+        return tasks  # Already sorted by created_at in get_tasks
+
+    async def reopen_task(self, task_id: str) -> bool:
+        """Reopen a completed task.
+
+        Args:
+            task_id: Todoist task ID
+
+        Returns:
+            True if reopened successfully, False otherwise
+
+        Raises:
+            TodoistError: For API errors
+        """
+        await self._rate_limiter.acquire()
+
+        try:
+            async with self._get_client() as client:
+                response = await client.post(
+                    f"{self.BASE_URL}/tasks/{task_id}/reopen",
+                    headers=self.headers,
+                )
+
+                if response.status_code == 204:  # No content - success
+                    return True
+                elif response.status_code == 404:
+                    logger.warning(f"Task {task_id} not found in Todoist")
+                    return False
+                elif response.status_code == 401:
+                    raise InvalidTokenError()
+                elif response.status_code == 403:
+                    raise QuotaExceededError()
+                elif response.status_code == 429:
+                    retry_after = int(response.headers.get("Retry-After", "60"))
+                    raise RateLimitError(retry_after=retry_after)
+                else:
+                    error_data = response.json() if response.content else {}
+                    raise TodoistError(f"Failed to reopen task: {error_data}")
+        except httpx.RequestError as e:
+            logger.error(f"Network error reopening task: {e}")
+            raise TodoistError(f"Network error: {str(e)}")
+
     def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client.
         

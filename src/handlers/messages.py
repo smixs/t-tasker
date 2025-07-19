@@ -8,8 +8,10 @@ from aiogram.types import Message
 from src.core.database import get_database
 from src.core.exceptions import BotError, TranscriptionError
 from src.models.db import User
+from src.models.intent import Intent, TaskCreation, CommandExecution
 from src.repositories.task import TaskRepository
 from src.repositories.user import UserRepository
+from src.services.command_executor import CommandExecutor
 from src.services.deepgram_service import DeepgramService
 from src.services.openai_service import OpenAIService
 from src.services.todoist_service import TodoistService
@@ -31,10 +33,10 @@ async def handle_text_message(
     message: Message,
     bot: Bot,
     user: "User",  # Injected by auth middleware
-    todoist_token: str  # Injected by auth middleware
+    todoist_token: str,  # Injected by auth middleware
 ) -> None:
     """Handle text messages.
-    
+
     Note: This handler requires auth middleware to be registered.
     The user and todoist_token are injected by the middleware.
     """
@@ -58,7 +60,7 @@ async def handle_text_message(
             async with db.get_session() as session:
                 task_repo = TaskRepository(session)
                 last_task = await task_repo.get_last_task(user_id)
-                
+
                 if last_task and last_task.todoist_id:
                     try:
                         # Delete from Todoist silently
@@ -70,13 +72,18 @@ async def handle_text_message(
                     except Exception as e:
                         logger.warning(f"Failed to auto-delete previous task: {e}")
                         # Continue with new task creation even if deletion fails
-        
-        # Parse task with OpenAI
-        openai_service = OpenAIService()
-        task = await openai_service.parse_task(message.text)
 
-        # Create task in Todoist
-        async with TodoistService(todoist_token) as todoist:
+        # Parse intent with OpenAI
+        openai_service = OpenAIService()
+        intent = await openai_service.parse_intent(message.text, user_language=user.language_code)
+
+        # Route based on intent type
+        if isinstance(intent, TaskCreation):
+            # Existing task creation logic
+            task = intent.task
+
+            # Create task in Todoist
+            async with TodoistService(todoist_token) as todoist:
                 # Check if project exists
                 if task.project_name:
                     project = await todoist.get_project_by_name(task.project_name)
@@ -95,29 +102,49 @@ async def handle_text_message(
                     duration=task.duration,
                 )
 
-        # Save task to database
-        db = get_database()
-        async with db.get_session() as session:
-            task_repo = TaskRepository(session)
-            created_task = await task_repo.create(
-                user_id=user_id,
-                message_text=message.text,
-                message_type="text",
-                task_schema=task,
-                todoist_id=todoist_task["id"],
-                todoist_url=todoist_task.get("url")
-            )
+            # Save task to database
+            db = get_database()
+            async with db.get_session() as session:
+                task_repo = TaskRepository(session)
+                created_task = await task_repo.create(
+                    user_id=user_id,
+                    message_text=message.text,
+                    message_type="text",
+                    task_schema=task,
+                    todoist_id=todoist_task["id"],
+                    todoist_url=todoist_task.get("url"),
+                )
 
-            user_repo = UserRepository(session)
-            await user_repo.increment_tasks_count(user_id)
+                user_repo = UserRepository(session)
+                await user_repo.increment_tasks_count(user_id)
 
-        # Delete processing message
-        await processing_msg.delete()
+            # Delete processing message
+            await processing_msg.delete()
 
-        # Send success message with inline keyboard
-        response = task_to_telegram_html(task, todoist_task)
-        keyboard = create_task_keyboard(created_task.id, todoist_task["id"])
-        await message.answer(response, parse_mode="HTML", reply_markup=keyboard)
+            # Send success message with inline keyboard
+            response = task_to_telegram_html(task, todoist_task)
+            keyboard = create_task_keyboard(created_task.id, todoist_task["id"])
+            await message.answer(response, parse_mode="HTML", reply_markup=keyboard)
+
+        elif isinstance(intent, CommandExecution):
+            # Execute command through CommandExecutor
+            executor = CommandExecutor()
+
+            # Delete processing message before showing command result
+            await processing_msg.delete()
+
+            # Execute command and send response
+            try:
+                response = await executor.execute(intent, user_id, todoist_token)
+                await message.answer(response, parse_mode="HTML")
+            except BotError as e:
+                # Command execution error
+                await message.answer(format_error_message(e))
+        else:
+            # Should not happen, but handle gracefully
+            logger.error(f"Unknown intent type: {type(intent)}")
+            await processing_msg.delete()
+            await message.answer("❌ Не удалось понять команду. Попробуйте еще раз.")
 
     except BotError as e:
         logger.warning(f"Bot error for user {user_id}: {e}")
@@ -130,12 +157,7 @@ async def handle_text_message(
 
 
 @message_router.message(F.voice)
-async def handle_voice_message(
-    message: Message,
-    bot: Bot,
-    user: "User",
-    todoist_token: str
-) -> None:
+async def handle_voice_message(message: Message, bot: Bot, user: "User", todoist_token: str) -> None:
     """Handle voice messages."""
     if not message.voice:
         return
@@ -145,10 +167,7 @@ async def handle_voice_message(
 
     # Check duration limit (5 minutes)
     if message.voice.duration > 300:
-        await message.answer(
-            "❌ Голосовое сообщение слишком длинное.\n"
-            "Максимальная длительность: 5 минут."
-        )
+        await message.answer("❌ Голосовое сообщение слишком длинное.\n" "Максимальная длительность: 5 минут.")
         return
 
     # Send typing action
@@ -165,7 +184,7 @@ async def handle_voice_message(
             async with db.get_session() as session:
                 task_repo = TaskRepository(session)
                 last_task = await task_repo.get_last_task(user_id)
-                
+
                 if last_task and last_task.todoist_id:
                     try:
                         # Delete from Todoist silently
@@ -177,7 +196,7 @@ async def handle_voice_message(
                     except Exception as e:
                         logger.warning(f"Failed to auto-delete previous task: {e}")
                         # Continue with new task creation even if deletion fails
-        
+
         # Download voice file
         file = await bot.get_file(message.voice.file_id)
         if not file.file_path:
@@ -194,56 +213,78 @@ async def handle_voice_message(
         text = await deepgram.transcribe(audio_bytes, mime_type="audio/ogg;codecs=opus")
 
         # Update message with transcribed text
-        await processing_msg.edit_text(
-            f"📝 Распознано: {text}\n\n"
-            "⏳ Создаю задачу..."
-        )
+        await processing_msg.edit_text(f"📝 Распознано: {text}\n\n" "⏳ Создаю задачу...")
 
-        # Process transcribed text through OpenAI
+        # Process transcribed text through OpenAI for intent
         openai_service = OpenAIService()
-        task = await openai_service.parse_task(text)
+        intent = await openai_service.parse_intent(text, user_language=user.language_code)
 
-        # Create task in Todoist
-        async with TodoistService(todoist_token) as todoist:
-            if task.project_name:
-                project = await todoist.get_project_by_name(task.project_name)
-                project_id = project["id"] if project else None
-            else:
-                project_id = None
+        # Route based on intent type
+        if isinstance(intent, TaskCreation):
+            # Existing task creation logic
+            task = intent.task
 
-            todoist_task = await todoist.create_task(
-                content=task.content,
-                description=task.description,
-                project_id=project_id,
-                labels=task.labels,
-                priority=task.priority or 1,
-                due_string=task.due_string,
-                duration=task.duration,
-            )
+            # Create task in Todoist
+            async with TodoistService(todoist_token) as todoist:
+                if task.project_name:
+                    project = await todoist.get_project_by_name(task.project_name)
+                    project_id = project["id"] if project else None
+                else:
+                    project_id = None
 
-        # Save task to database
-        db = get_database()
-        async with db.get_session() as session:
-            task_repo = TaskRepository(session)
-            created_task = await task_repo.create(
-                user_id=user_id,
-                message_text=text,  # Распознанный текст из голосового сообщения
-                message_type="voice",
-                task_schema=task,
-                todoist_id=todoist_task["id"],
-                todoist_url=todoist_task.get("url")
-            )
+                todoist_task = await todoist.create_task(
+                    content=task.content,
+                    description=task.description,
+                    project_id=project_id,
+                    labels=task.labels,
+                    priority=task.priority or 1,
+                    due_string=task.due_string,
+                    duration=task.duration,
+                )
 
-            user_repo = UserRepository(session)
-            await user_repo.increment_tasks_count(user_id)
+            # Save task to database
+            db = get_database()
+            async with db.get_session() as session:
+                task_repo = TaskRepository(session)
+                created_task = await task_repo.create(
+                    user_id=user_id,
+                    message_text=text,  # Распознанный текст из голосового сообщения
+                    message_type="voice",
+                    task_schema=task,
+                    todoist_id=todoist_task["id"],
+                    todoist_url=todoist_task.get("url"),
+                )
 
-        # Delete processing message
-        await processing_msg.delete()
+                user_repo = UserRepository(session)
+                await user_repo.increment_tasks_count(user_id)
 
-        # Send success message with inline keyboard
-        response = task_to_telegram_html(task, todoist_task)
-        keyboard = create_task_keyboard(created_task.id, todoist_task["id"])
-        await message.answer(response, parse_mode="HTML", reply_markup=keyboard)
+            # Delete processing message
+            await processing_msg.delete()
+
+            # Send success message with inline keyboard
+            response = task_to_telegram_html(task, todoist_task)
+            keyboard = create_task_keyboard(created_task.id, todoist_task["id"])
+            await message.answer(response, parse_mode="HTML", reply_markup=keyboard)
+
+        elif isinstance(intent, CommandExecution):
+            # Execute command through CommandExecutor
+            executor = CommandExecutor()
+
+            # Delete processing message before showing command result
+            await processing_msg.delete()
+
+            # Execute command and send response
+            try:
+                response = await executor.execute(intent, user_id, todoist_token)
+                await message.answer(response, parse_mode="HTML")
+            except BotError as e:
+                # Command execution error
+                await message.answer(format_error_message(e))
+        else:
+            # Should not happen, but handle gracefully
+            logger.error(f"Unknown intent type from voice: {type(intent)}")
+            await processing_msg.delete()
+            await message.answer("❌ Не удалось понять команду из голосового сообщения.")
 
     except TranscriptionError as e:
         logger.warning(f"Transcription error for user {user_id}: {e}")
@@ -256,10 +297,7 @@ async def handle_voice_message(
     except Exception as e:
         logger.error(f"Unexpected error for user {user_id}: {e}", exc_info=True)
         await processing_msg.delete()
-        await message.answer(
-            "❌ Произошла ошибка при обработке голосового сообщения.\n"
-            "Попробуйте еще раз."
-        )
+        await message.answer("❌ Произошла ошибка при обработке голосового сообщения.\n" "Попробуйте еще раз.")
 
 
 @message_router.message(F.video_note)
@@ -271,10 +309,7 @@ async def handle_video_note(message: Message) -> None:
     # TODO: Extract audio from video
     # TODO: Process as voice message
 
-    await message.answer(
-        "📹 Получил видео сообщение.\n"
-        "Функция обработки видео скоро будет доступна!"
-    )
+    await message.answer("📹 Получил видео сообщение.\n" "Функция обработки видео скоро будет доступна!")
 
 
 @message_router.message(F.video)
@@ -285,10 +320,7 @@ async def handle_video_message(message: Message) -> None:
     # TODO: Check if video has audio track
     # TODO: Extract and process audio
 
-    await message.answer(
-        "📹 Получил видео.\n"
-        "Для создания задач используйте текст или голосовые сообщения."
-    )
+    await message.answer("📹 Получил видео.\n" "Для создания задач используйте текст или голосовые сообщения.")
 
 
 @message_router.message(F.audio)
@@ -299,7 +331,4 @@ async def handle_audio_message(message: Message) -> None:
 
     # TODO: Process as voice message
 
-    await message.answer(
-        "🎵 Получил аудио файл.\n"
-        "Функция обработки аудио скоро будет доступна!"
-    )
+    await message.answer("🎵 Получил аудио файл.\n" "Функция обработки аудио скоро будет доступна!")
