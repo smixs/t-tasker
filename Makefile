@@ -1,14 +1,30 @@
-.PHONY: help clean db restart run logs status test lint typecheck install
+.PHONY: help clean db restart run logs status test lint typecheck install \
+        docker-build docker-up docker-down docker-logs docker-shell docker-restart \
+        docker-rebuild docker-deploy backup-db shell-postgres shell-redis
 
 # Default target
 help:
 	@echo "TaskerBot Makefile Commands:"
+	@echo ""
+	@echo "Local Development:"
 	@echo "  make clean      - Stop all containers and remove volumes"
 	@echo "  make db         - Start PostgreSQL and Redis containers"
 	@echo "  make restart    - Full restart with clean database"
 	@echo "  make run        - Run bot locally (polling mode)"
 	@echo "  make logs       - Show container logs"
 	@echo "  make status     - Show container status"
+	@echo ""
+	@echo "Docker Commands:"
+	@echo "  make docker-build    - Build Docker image"
+	@echo "  make docker-up       - Start containers (with rebuild)"
+	@echo "  make docker-down     - Stop containers"
+	@echo "  make docker-restart  - Restart bot (with rebuild)"
+	@echo "  make docker-rebuild  - Full rebuild without cache"
+	@echo "  make docker-deploy   - Full deploy cycle"
+	@echo "  make docker-logs     - Show bot logs"
+	@echo "  make docker-shell    - Shell into bot container"
+	@echo ""
+	@echo "Code Quality:"
 	@echo "  make test       - Run tests"
 	@echo "  make lint       - Run linter"
 	@echo "  make typecheck  - Run type checker"
@@ -106,7 +122,7 @@ docker-build:
 	docker compose build
 
 docker-up:
-	docker compose up -d
+	docker compose up -d --build
 
 docker-down:
 	docker compose down
@@ -118,4 +134,12 @@ docker-shell:
 	docker compose exec bot bash
 
 docker-restart:
-	docker compose restart bot
+	docker compose down
+	docker compose up -d --build bot
+
+docker-rebuild:
+	docker compose down
+	docker compose build --no-cache bot
+	docker compose up -d bot
+
+docker-deploy: docker-down docker-build docker-up docker-logs

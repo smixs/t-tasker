@@ -80,13 +80,18 @@ async def cmd_setup(message: Message, state: FSMContext) -> None:
     """Handle /setup command - start token setup."""
     from aiogram.types import FSInputFile
     from pathlib import Path
+    import os
     
     await state.set_state(SetupStates.waiting_for_token)
 
     # Send instruction image first
-    image_path = Path("assets/images/todoist_api_token_guide.png")
+    image_path = Path("/app/assets/images/todoist_api_token_guide.png")
+    logger.info(f"Looking for image at: {image_path}")
+    logger.info(f"Image exists: {image_path.exists()}")
+    logger.info(f"Current working directory: {os.getcwd()}")
+    
     if image_path.exists():
-        photo = FSInputFile(image_path)
+        photo = FSInputFile(str(image_path))
         await message.answer_photo(
             photo=photo,
             caption=(
