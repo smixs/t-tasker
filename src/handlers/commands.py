@@ -78,19 +78,41 @@ async def cmd_help(message: Message) -> None:
 @command_router.message(Command("setup"))
 async def cmd_setup(message: Message, state: FSMContext) -> None:
     """Handle /setup command - start token setup."""
+    from aiogram.types import FSInputFile
+    from pathlib import Path
+    
     await state.set_state(SetupStates.waiting_for_token)
 
-    await message.answer(
-        "🔐 **Настройка подключения к Todoist**\n\n"
-        "Для подключения мне нужен ваш Personal API Token:\n\n"
-        "1. Откройте [Todoist Settings](https://app.todoist.com/app/settings/integrations/developer)\n"
-        "2. Скопируйте ваш API token\n"
-        "3. Отправьте его мне в следующем сообщении\n\n"
-        "⚠️ Токен будет зашифрован и сохранен безопасно.\n"
-        "Никто кроме вас не будет иметь к нему доступ.",
-        parse_mode="Markdown",
-        disable_web_page_preview=True
-    )
+    # Send instruction image first
+    image_path = Path("assets/images/todoist_api_token_guide.png")
+    if image_path.exists():
+        photo = FSInputFile(image_path)
+        await message.answer_photo(
+            photo=photo,
+            caption=(
+                "🔐 **Настройка подключения к Todoist**\n\n"
+                "Для подключения мне нужен ваш Personal API Token:\n\n"
+                "1. Откройте [Todoist Settings](https://app.todoist.com/app/settings/integrations/developer)\n"
+                "2. Скопируйте ваш API token (см. скриншот выше)\n"
+                "3. Отправьте его мне в следующем сообщении\n\n"
+                "⚠️ Токен будет зашифрован и сохранен безопасно.\n"
+                "Никто кроме вас не будет иметь к нему доступ."
+            ),
+            parse_mode="Markdown"
+        )
+    else:
+        # Fallback to text-only message if image not found
+        await message.answer(
+            "🔐 **Настройка подключения к Todoist**\n\n"
+            "Для подключения мне нужен ваш Personal API Token:\n\n"
+            "1. Откройте [Todoist Settings](https://app.todoist.com/app/settings/integrations/developer)\n"
+            "2. Скопируйте ваш API token\n"
+            "3. Отправьте его мне в следующем сообщении\n\n"
+            "⚠️ Токен будет зашифрован и сохранен безопасно.\n"
+            "Никто кроме вас не будет иметь к нему доступ.",
+            parse_mode="Markdown",
+            disable_web_page_preview=True
+        )
 
 
 @command_router.message(SetupStates.waiting_for_token)

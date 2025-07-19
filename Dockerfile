@@ -24,6 +24,9 @@ RUN uv sync --frozen --no-dev
 # Copy application code
 COPY src ./src
 
+# Copy assets (images, etc.)
+COPY assets ./assets
+
 # Change ownership
 RUN chown -R appuser:appuser /app
 
