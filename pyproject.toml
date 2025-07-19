@@ -1,0 +1,37 @@
+[project]
+name = "t-tasker"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram==3.21.0",
+    "pydantic==2.10.4", 
+    "pydantic-settings==2.7.0",
+    "python-dotenv==1.0.1",
+    "aiohttp==3.11.13",
+    "ruff==0.8.6",
+    "mypy==1.14.1",
+    "pytest==8.3.4",
+    "pytest-asyncio==0.25.2",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+select = ["E", "F", "I", "N", "W", "UP", "B", "SIM", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pytest-cov==6.0.0",
+]
