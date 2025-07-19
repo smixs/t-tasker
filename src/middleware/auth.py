@@ -4,9 +4,11 @@ import logging
 from typing import Any, Awaitable, Callable, Dict
 
 from aiogram import BaseMiddleware
+from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, TelegramObject
 
 from src.core.database import get_database
+from src.handlers.states import SetupStates
 from src.repositories.user import UserRepository
 from src.services.encryption import EncryptionService
 
@@ -42,6 +44,14 @@ class AuthMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         user_id = event.from_user.id
+        
+        # Check if user is in setup state
+        state: FSMContext = data.get("state")
+        if state:
+            current_state = await state.get_state()
+            if current_state == SetupStates.waiting_for_token.state:
+                # Allow token processing
+                return await handler(event, data)
         
         # Get user from database
         async with self.db.get_session() as session:

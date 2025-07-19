@@ -5,10 +5,10 @@ import logging
 from aiogram import Router
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 from src.core.database import get_database
+from src.handlers.states import SetupStates
 from src.repositories.user import UserRepository
 from src.services.encryption import get_encryption_service
 
@@ -16,12 +16,6 @@ logger = logging.getLogger(__name__)
 
 # Create router for commands
 command_router = Router(name="commands")
-
-
-class SetupStates(StatesGroup):
-    """States for setup process."""
-
-    waiting_for_token = State()
 
 
 @command_router.message(CommandStart())

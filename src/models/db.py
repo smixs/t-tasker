@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -18,7 +18,7 @@ class User(Base):
     __tablename__ = "users"
 
     # Telegram user ID as primary key
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     username: Mapped[str | None] = mapped_column(String(32), nullable=True)
     first_name: Mapped[str] = mapped_column(String(255))
     last_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -57,7 +57,7 @@ class Task(Base):
     __tablename__ = "tasks"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"))
     
     # Original message
     message_text: Mapped[str] = mapped_column(String(4096))
