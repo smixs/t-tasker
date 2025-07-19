@@ -51,6 +51,26 @@ async def handle_text_message(
     processing_msg = await message.answer(format_processing_message())
 
     try:
+        # Check if auto-delete is enabled
+        if user.auto_delete_previous:
+            # Get and delete previous task
+            db = get_database()
+            async with db.get_session() as session:
+                task_repo = TaskRepository(session)
+                last_task = await task_repo.get_last_task(user_id)
+                
+                if last_task and last_task.todoist_id:
+                    try:
+                        # Delete from Todoist silently
+                        async with TodoistService(todoist_token) as todoist:
+                            await todoist.delete_task(last_task.todoist_id)
+                        # Delete from database
+                        await task_repo.delete_task_record(last_task.id)
+                        logger.info(f"Auto-deleted previous task {last_task.id} for user {user_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to auto-delete previous task: {e}")
+                        # Continue with new task creation even if deletion fails
+        
         # Parse task with OpenAI
         openai_service = OpenAIService()
         task = await openai_service.parse_task(message.text)
@@ -138,6 +158,26 @@ async def handle_voice_message(
     processing_msg = await message.answer("🎤 Распознаю голосовое сообщение...")
 
     try:
+        # Check if auto-delete is enabled
+        if user.auto_delete_previous:
+            # Get and delete previous task
+            db = get_database()
+            async with db.get_session() as session:
+                task_repo = TaskRepository(session)
+                last_task = await task_repo.get_last_task(user_id)
+                
+                if last_task and last_task.todoist_id:
+                    try:
+                        # Delete from Todoist silently
+                        async with TodoistService(todoist_token) as todoist:
+                            await todoist.delete_task(last_task.todoist_id)
+                        # Delete from database
+                        await task_repo.delete_task_record(last_task.id)
+                        logger.info(f"Auto-deleted previous task {last_task.id} for user {user_id}")
+                    except Exception as e:
+                        logger.warning(f"Failed to auto-delete previous task: {e}")
+                        # Continue with new task creation even if deletion fails
+        
         # Download voice file
         file = await bot.get_file(message.voice.file_id)
         if not file.file_path:

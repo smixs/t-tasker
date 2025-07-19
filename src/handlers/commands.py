@@ -68,6 +68,7 @@ async def cmd_help(message: Message) -> None:
         "/status - Проверить статус подключения\n"
         "/undo - Удалить последнюю задачу\n"
         "/recent - Показать последние 5 задач\n"
+        "/autodelete - Вкл/выкл автоудаление предыдущей задачи\n"
         "/help - Эта справка\n"
         "/cancel - Отменить текущую операцию",
         parse_mode="Markdown"
@@ -227,6 +228,34 @@ async def handle_undo(
         except Exception as e:
             logger.error(f"Unexpected error deleting task: {e}", exc_info=True)
             await message.answer("❌ Произошла ошибка при удалении задачи.")
+
+
+@command_router.message(Command("autodelete"))
+async def handle_autodelete(
+    message: Message,
+    user: "User"
+) -> None:
+    """Toggle auto-delete previous task setting."""
+    if not message.from_user:
+        return
+
+    user_id = message.from_user.id
+    
+    # Toggle the setting
+    db = get_database()
+    async with db.get_session() as session:
+        user_repo = UserRepository(session)
+        
+        # Toggle auto_delete_previous setting
+        user.auto_delete_previous = not user.auto_delete_previous
+        await user_repo.update(user)
+        
+        status = "включено ✅" if user.auto_delete_previous else "выключено ❌"
+        
+        await message.answer(
+            f"🗑 Автоудаление предыдущей задачи {status}\n\n"
+            f"{'Теперь при создании новой задачи предыдущая будет автоматически удаляться.' if user.auto_delete_previous else 'Все созданные задачи будут сохраняться.'}"
+        )
 
 
 @command_router.message(Command("recent"))

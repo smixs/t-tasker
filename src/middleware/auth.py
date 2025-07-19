@@ -6,7 +6,7 @@ from typing import Any
 
 from aiogram import BaseMiddleware
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, TelegramObject
+from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from src.core.database import get_database
 from src.handlers.states import SetupStates
@@ -33,18 +33,23 @@ class AuthMiddleware(BaseMiddleware):
         data: dict[str, Any]
     ) -> Any:
         """Process the update."""
-        if not isinstance(event, Message):
-            return await handler(event, data)
+        # Handle both Message and CallbackQuery
+        if isinstance(event, Message):
+            # Skip auth for non-user messages
+            if not event.from_user:
+                return await handler(event, data)
 
-        # Skip auth for non-user messages
-        if not event.from_user:
-            return await handler(event, data)
+            # Check if it's a public command
+            if event.text and any(event.text.startswith(cmd) for cmd in self.public_commands):
+                return await handler(event, data)
 
-        # Check if it's a public command
-        if event.text and any(event.text.startswith(cmd) for cmd in self.public_commands):
+            user_id = event.from_user.id
+        elif isinstance(event, CallbackQuery):
+            # Callback queries always have from_user
+            user_id = event.from_user.id
+        else:
+            # Not a message or callback - pass through
             return await handler(event, data)
-
-        user_id = event.from_user.id
 
         # Check if user is in setup state
         state: FSMContext = data.get("state")

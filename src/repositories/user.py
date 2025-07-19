@@ -146,3 +146,12 @@ class UserRepository:
         await self.session.commit()
         logger.info(f"Deleted user {user_id}")
         return True
+    
+    async def update(self, user: User) -> None:
+        """Update user in database.
+        
+        Args:
+            user: User object to update
+        """
+        await self.session.commit()
+        logger.info(f"Updated user {user.id}")

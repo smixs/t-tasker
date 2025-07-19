@@ -77,11 +77,17 @@ class Application:
         self.dispatcher.include_router(callback_router)
         
         # Register middleware (order matters - auth should be after user context)
+        # For messages
         self.dispatcher.message.middleware(RateLimitMiddleware())
         self.dispatcher.message.middleware(UserContextMiddleware())
         self.dispatcher.message.middleware(AuthMiddleware())
         self.dispatcher.message.middleware(ErrorHandlingMiddleware())
         self.dispatcher.message.middleware(LoggingMiddleware())
+        
+        # For callback queries
+        self.dispatcher.callback_query.middleware(UserContextMiddleware())
+        self.dispatcher.callback_query.middleware(AuthMiddleware())
+        self.dispatcher.callback_query.middleware(ErrorHandlingMiddleware())
         
         # Delete webhook if exists
         await self.bot.delete_webhook(drop_pending_updates=True)

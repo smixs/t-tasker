@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import Message, TelegramObject
+from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from src.core.exceptions import BotError
 
@@ -78,17 +78,20 @@ class ErrorHandlingMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message, dict[str, Any]], Awaitable[Any]],
-        event: Message,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: dict[str, Any]
     ) -> Any:
-        """Process message with error handling."""
+        """Process event with error handling."""
         try:
             return await handler(event, data)
         except BotError as e:
             # Send user-friendly error message
             logger.warning(f"Bot error: {e}")
-            await event.answer(f"❌ {e.user_message}")
+            if isinstance(event, Message):
+                await event.answer(f"❌ {e.user_message}")
+            elif isinstance(event, CallbackQuery):
+                await event.answer(f"❌ {e.user_message}", show_alert=True)
         except Exception as e:
             # Log unexpected error
             request_id = data.get("request_id", "unknown")
@@ -98,9 +101,11 @@ class ErrorHandlingMiddleware(BaseMiddleware):
             )
 
             # Send generic error message
-            await event.answer(
-                "❌ Произошла неожиданная ошибка. Попробуйте позже."
-            )
+            error_msg = "❌ Произошла неожиданная ошибка. Попробуйте позже."
+            if isinstance(event, Message):
+                await event.answer(error_msg)
+            elif isinstance(event, CallbackQuery):
+                await event.answer(error_msg, show_alert=True)
 
 
 class UserContextMiddleware(BaseMiddleware):
@@ -116,13 +121,18 @@ class UserContextMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Message, dict[str, Any]], Awaitable[Any]],
-        event: Message,
+        handler: Callable[[TelegramObject, dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: dict[str, Any]
     ) -> Any:
         """Add user context to data."""
-        # Extract user
-        user = event.from_user
+        # Extract user from Message or CallbackQuery
+        user = None
+        if isinstance(event, Message):
+            user = event.from_user
+        elif isinstance(event, CallbackQuery):
+            user = event.from_user
+            
         if not user:
             return await handler(event, data)
 
