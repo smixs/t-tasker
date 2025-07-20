@@ -326,3 +326,15 @@ async def handle_recent(
             parse_mode="HTML",
             reply_markup=keyboard
         )
+
+
+@command_router.message(Command("cancel"))
+async def handle_cancel(message: Message, state: FSMContext) -> None:
+    """Cancel current operation."""
+    current_state = await state.get_state()
+    
+    if current_state:
+        await state.clear()
+        await message.answer("❌ Операция отменена")
+    else:
+        await message.answer("Нет активной операции для отмены")

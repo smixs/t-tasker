@@ -19,7 +19,7 @@ from src.core.middleware import (
     UserContextMiddleware,
 )
 from src.core.settings import get_settings
-from src.handlers import callback_router, command_router, error_router, message_router
+from src.handlers import callback_router, command_router, edit_router, error_router, message_router
 from src.middleware.auth import AuthMiddleware
 
 # Configure logging
@@ -70,9 +70,10 @@ class Application:
             storage=RedisStorage(self.redis)
         )
         
-        # Register routers
+        # Register routers (order matters - edit_router must be before message_router)
         self.dispatcher.include_router(error_router)
         self.dispatcher.include_router(command_router)
+        self.dispatcher.include_router(edit_router)  # Edit handlers have priority over message handlers
         self.dispatcher.include_router(message_router)
         self.dispatcher.include_router(callback_router)
         
