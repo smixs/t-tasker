@@ -10,8 +10,8 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.core.exceptions import OpenAIError, ValidationError
 from src.core.settings import Settings, get_settings
+from src.models.intent import Intent, IntentWrapper, TaskCreation
 from src.models.task import TaskSchema
-from src.models.intent import Intent, TaskCreation, CommandExecution, IntentWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -84,11 +84,16 @@ class OpenAIService:
 Правила извлечения:
 1. content - основной текст задачи (обязательно)
 2. description - дополнительное описание (если есть)  
-3. due_string - ИСКАТЬ В ТАКОМ ПОРЯДКЕ:
-   - Конкретная дата: "15 марта", "20.03", "20/03/2025"
-   - Конкретное время: "в 14:00", "в 9:30"
-   - Комбинация: "15 марта в 14:00", "20.03.2025 в 16:30"
-   - Относительная дата ТОЛЬКО если нет конкретной: "завтра", "послезавтра"
+3. due_string - КОНВЕРТИРОВАТЬ В АНГЛИЙСКИЙ ФОРМАТ:
+   - Дни недели: "понедельник"→"monday", "вторник"→"tuesday", "среда"→"wednesday", "четверг"→"thursday", "пятница"→"friday", "суббота"→"saturday", "воскресенье"→"sunday"
+   - Месяцы: "января"→"jan", "февраля"→"feb", "марта"→"mar", "апреля"→"apr", "мая"→"may", "июня"→"jun", "июля"→"jul", "августа"→"aug", "сентября"→"sep", "октября"→"oct", "ноября"→"nov", "декабря"→"dec"
+   - Относительные: "сегодня"→"today", "завтра"→"tomorrow", "послезавтра"→"day after tomorrow"
+   - Время: "в 14:00"→"at 14:00", "в 9:30"→"at 9:30"
+   - Примеры: "15 марта"→"mar 15", "четверг в 12:00"→"thursday at 12:00", "завтра в 15:00"→"tomorrow at 15:00"
+   ВАЖНО: УДАЛЯТЬ любые указания места/тайм-зоны:
+   - "по Минску", "по Ташкенту", "по Москве" → удалить
+   - "четверг в 12:00 по Минску" → "thursday at 12:00"
+   - "завтра в 15:00 по Ташкенту" → "tomorrow at 15:00"
 4. priority - приоритет: 1 (обычный), 2 (средний), 3 (высокий), 4 (срочный)
 5. project_name - название проекта (если указано)
 6. labels - метки/теги (если есть)
@@ -96,10 +101,11 @@ class OpenAIService:
 8. duration - длительность в минутах (если указано)
 
 ПРИМЕРЫ ПРАВИЛЬНОГО ИЗВЛЕЧЕНИЯ:
-- "Встреча завтра 15 марта в 14:00" → due_string: "15 марта в 14:00" (НЕ "завтра")
-- "Позвонить клиенту послезавтра 20.03 в 10:00" → due_string: "20.03 в 10:00"
-- "Сделать отчет завтра" → due_string: "завтра" (нет абсолютной даты)
-- "Встреча в офисе 25 марта" → due_string: "25 марта"
+- "Встреча завтра 15 марта в 14:00" → due_string: "mar 15 at 14:00" (НЕ "tomorrow")
+- "Позвонить клиенту послезавтра 20.03 в 10:00" → due_string: "mar 20 at 10:00"
+- "Сделать отчет завтра" → due_string: "tomorrow" (нет абсолютной даты)
+- "Встреча в офисе 25 марта" → due_string: "mar 25"
+- "В четверг в 12:00 по Минску встреча" → due_string: "thursday at 12:00" (БЕЗ "по Минску")
 """
         else:
             system_prompt = """
@@ -155,12 +161,13 @@ CORRECT EXTRACTION EXAMPLES:
             raise OpenAIError(f"Failed to parse task: {str(e)}") from e
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10), reraise=True)
-    async def parse_intent(self, message: str, user_language: str = "ru") -> Intent:
+    async def parse_intent(self, message: str, user_language: str = "ru", forward_author: str | None = None) -> Intent:
         """Parse user intent from message - either create task or execute command.
 
         Args:
             message: User message
             user_language: User language code
+            forward_author: Name of the person who forwarded the message (if applicable)
 
         Returns:
             Intent object (either TaskCreation or CommandExecution)
@@ -178,7 +185,7 @@ CORRECT EXTRACTION EXAMPLES:
 
         # Prepare system prompt based on language
         if user_language == "ru":
-            system_prompt = """
+            base_prompt = """
 Ты - интеллектуальный классификатор намерений для Todoist бота. 
 Определи, что хочет сделать пользователь: создать новую задачу или выполнить команду с существующими задачами.
 
@@ -218,8 +225,31 @@ CORRECT EXTRACTION EXAMPLES:
 
 ВАЖНО: Если сомневаешься между созданием и командой, выбирай создание задачи.
 """
+
+            # Add forward author context if provided
+            if forward_author:
+                system_prompt = base_prompt + f"""
+
+ВАЖНО: ПЕРЕСЛАННОЕ СООБЩЕНИЕ!
+Это сообщение переслано от другого человека: {forward_author}
+
+При создании задачи из ПЕРЕСЛАННОГО сообщения:
+- Это сообщение/просьба/задание исходит ОТ {forward_author} (не от текущего пользователя!)
+- ОБЯЗАТЕЛЬНО включи имя {forward_author} в текст задачи, чтобы было понятно, от кого это
+- НЕ создавай задачу от имени пользователя - укажи реального автора {forward_author}
+
+Примеры правильной обработки ПЕРЕСЛАННЫХ сообщений:
+  * "Встреча завтра" от Ивана → content: "Встреча с Иваном завтра"
+  * "Нужен отчет" от начальника → content: "Отчет для начальника"
+  * "Созвон в 15:00" от Анны → content: "Созвон с Анной в 15:00"
+  * "Сергей, надо работу" от Виолетты → content: "Работа от Виолетты для Сергея"
+  
+Помни: обычные сообщения (не пересланные) обрабатываются как есть, без добавления автора!
+"""
+            else:
+                system_prompt = base_prompt
         else:
-            system_prompt = """
+            base_prompt = """
 You are an intelligent intent classifier for a Todoist bot.
 Determine what the user wants to do: create a new task or execute a command on existing tasks.
 
@@ -259,6 +289,29 @@ CLASSIFICATION RULES:
 
 IMPORTANT: When in doubt between creation and command, choose task creation.
 """
+
+            # Add forward author context if provided
+            if forward_author:
+                system_prompt = base_prompt + f"""
+
+IMPORTANT: FORWARDED MESSAGE!
+This message is forwarded from another person: {forward_author}
+
+When creating a task from a FORWARDED message:
+- This message/request/task originates FROM {forward_author} (not from the current user!)
+- ALWAYS include {forward_author}'s name in the task text to clarify who it's from
+- DO NOT create the task as if from the user - indicate the real author {forward_author}
+
+Examples of correct FORWARDED message processing:
+  * "Meeting tomorrow" from Ivan → content: "Meeting with Ivan tomorrow"
+  * "Need report" from manager → content: "Report for manager"
+  * "Call at 3:00 PM" from Anna → content: "Call with Anna at 3:00 PM"
+  * "John, need work done" from Violet → content: "Work from Violet for John"
+  
+Remember: regular messages (not forwarded) are processed as-is, without adding any author!
+"""
+            else:
+                system_prompt = base_prompt
 
         try:
             # Create messages
@@ -330,7 +383,13 @@ General rules:
 - "15 марта" → "mar 15"
 - "в 14:00" → "at 14:00"
 - "завтра в 15:00" → "tomorrow at 15:00"
-- If you cannot parse the date, return the original text unchanged
+
+IMPORTANT: Remove any timezone/location references:
+- "в 12:00 по Минску" → "at 12:00"
+- "15:00 по Ташкенту" → "at 15:00"
+- "завтра в 10:00 по Москве" → "tomorrow at 10:00"
+
+If you cannot parse the date, return the original text unchanged
 
 Respond ONLY with the date string, no explanations.
 """

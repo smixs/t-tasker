@@ -139,6 +139,8 @@ class TodoistService:
             task_data["duration"] = duration
             task_data["duration_unit"] = duration_unit or "minute"
 
+        logger.info(f"Creating task with data: {task_data}")
+
         try:
             async with self._get_client() as client:
                 response = await client.post(
@@ -155,7 +157,10 @@ class TodoistService:
                     retry_after = int(response.headers.get("Retry-After", "60"))
                     raise RateLimitError(retry_after=retry_after)
                 elif response.status_code != 200:
-                    error_data = response.json() if response.content else {}
+                    try:
+                        error_data = response.json() if response.content else {"error": "Empty response"}
+                    except Exception:
+                        error_data = {"error": f"Invalid response: {response.text[:100]}"}
                     raise TodoistError(f"Failed to create task: {error_data}")
 
                 return response.json()
@@ -266,18 +271,18 @@ class TodoistService:
             TodoistError: For API errors
         """
         await self._rate_limiter.acquire()
-        
+
         # Build update data - only include fields that are provided
         update_data = {}
         allowed_fields = ["content", "description", "due_string", "priority", "labels"]
-        
+
         for field in allowed_fields:
             if field in kwargs and kwargs[field] is not None:
                 update_data[field] = kwargs[field]
-        
+
         if not update_data:
             raise TodoistError("No fields to update")
-        
+
         try:
             async with self._get_client() as client:
                 response = await client.post(
@@ -285,7 +290,7 @@ class TodoistService:
                     headers=self.headers,
                     json=update_data,
                 )
-                
+
                 if response.status_code == 401:
                     raise InvalidTokenError()
                 elif response.status_code == 403:
@@ -294,7 +299,7 @@ class TodoistService:
                     raise TodoistError("Task not found")
                 elif response.status_code != 200:
                     raise TodoistError(f"Failed to update task: {response.status_code}")
-                
+
                 return response.json()
         except httpx.RequestError as e:
             logger.error(f"Network error updating task: {e}")
@@ -426,7 +431,7 @@ class TodoistService:
                     raise TodoistError(f"Failed to get tasks: {response.status_code}")
 
                 tasks = response.json()
-                
+
                 # Apply client-side filtering if needed
                 if filter_string and filter_string not in ["today", "tomorrow", "overdue"]:
                     # For filters like "p1", "p2", etc., we need to filter manually
@@ -436,7 +441,7 @@ class TodoistService:
                             tasks = [t for t in tasks if t.get("priority", 1) == priority]
                         except (ValueError, IndexError):
                             pass
-                
+
                 # Sort by created date (newest first) and limit
                 tasks.sort(key=lambda x: x.get("created_at", ""), reverse=True)
                 return tasks[:limit]

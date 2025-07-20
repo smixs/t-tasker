@@ -1,6 +1,7 @@
 """Intent models for classifying user messages."""
 
 from typing import Literal, Union
+
 from pydantic import BaseModel, Field
 
 from src.models.task import TaskSchema
@@ -65,7 +66,7 @@ class IntentWrapper(BaseModel):
     updates: dict[str, str | int | list[str]] | None = Field(None, description="Updates to apply to tasks")
     task_identifier: str | None = Field(None, description="Specific task identifier if target='specific'")
 
-    def to_intent(self) -> Union[TaskCreation, CommandExecution]:
+    def to_intent(self) -> TaskCreation | CommandExecution:
         """Convert wrapper to appropriate intent type."""
         if self.intent_type == "create_task":
             if not self.task_data:

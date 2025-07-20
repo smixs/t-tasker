@@ -49,34 +49,34 @@ class Application:
     async def setup(self) -> None:
         """Setup application components."""
         logger.info("Setting up application...")
-        
+
         # Initialize database
         await self.database.create_tables()
-        
+
         # Setup Redis
         self.redis = Redis.from_url(
             self.settings.redis_url,
             decode_responses=True
         )
-        
+
         # Create bot
         self.bot = Bot(
             token=self.settings.telegram_token,
             default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
-        
+
         # Create dispatcher with Redis storage
         self.dispatcher = Dispatcher(
             storage=RedisStorage(self.redis)
         )
-        
+
         # Register routers (order matters - edit_router must be before message_router)
         self.dispatcher.include_router(error_router)
         self.dispatcher.include_router(command_router)
         self.dispatcher.include_router(edit_router)  # Edit handlers have priority over message handlers
         self.dispatcher.include_router(message_router)
         self.dispatcher.include_router(callback_router)
-        
+
         # Register middleware (order matters - auth should be after user context)
         # For messages
         self.dispatcher.message.middleware(RateLimitMiddleware())
@@ -84,67 +84,67 @@ class Application:
         self.dispatcher.message.middleware(AuthMiddleware())
         self.dispatcher.message.middleware(ErrorHandlingMiddleware())
         self.dispatcher.message.middleware(LoggingMiddleware())
-        
+
         # For callback queries
         self.dispatcher.callback_query.middleware(UserContextMiddleware())
         self.dispatcher.callback_query.middleware(AuthMiddleware())
         self.dispatcher.callback_query.middleware(ErrorHandlingMiddleware())
-        
+
         # Delete webhook if exists
         await self.bot.delete_webhook(drop_pending_updates=True)
-        
+
         logger.info("Application setup complete")
 
     async def start(self) -> None:
         """Start the application."""
         logger.info("Starting application...")
-        
+
         # Setup signal handlers
         for sig in (signal.SIGTERM, signal.SIGINT):
             signal.signal(sig, lambda s, f: asyncio.create_task(self.shutdown()))
-        
+
         # Get bot info
         bot_info = await self.bot.get_me()
         logger.info(f"Bot @{bot_info.username} is starting in polling mode")
-        
+
         # Start polling
         try:
             await self.dispatcher.start_polling(self.bot)
         except asyncio.CancelledError:
             logger.info("Polling cancelled")
-        
+
         # Wait for shutdown
         await self._shutdown_event.wait()
 
     async def shutdown(self) -> None:
         """Shutdown the application gracefully."""
         logger.info("Shutting down application...")
-        
+
         # Stop polling
         if self.dispatcher:
             await self.dispatcher.stop_polling()
-        
+
         # Close bot session
         if self.bot:
             await self.bot.session.close()
-        
+
         # Close Redis
         if self.redis:
             await self.redis.close()
-        
+
         # Close database
         await self.database.close()
-        
+
         # Set shutdown event
         self._shutdown_event.set()
-        
+
         logger.info("Application shutdown complete")
 
 
 async def main() -> None:
     """Main entry point."""
     app = Application()
-    
+
     try:
         await app.setup()
         await app.start()

@@ -128,11 +128,9 @@ class UserContextMiddleware(BaseMiddleware):
         """Add user context to data."""
         # Extract user from Message or CallbackQuery
         user = None
-        if isinstance(event, Message):
+        if isinstance(event, Message) or isinstance(event, CallbackQuery):
             user = event.from_user
-        elif isinstance(event, CallbackQuery):
-            user = event.from_user
-            
+
         if not user:
             return await handler(event, data)
 

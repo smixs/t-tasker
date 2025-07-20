@@ -8,7 +8,7 @@ from aiogram.types import Message
 from src.core.database import get_database
 from src.core.exceptions import BotError, TranscriptionError
 from src.models.db import User
-from src.models.intent import Intent, TaskCreation, CommandExecution
+from src.models.intent import CommandExecution, TaskCreation
 from src.repositories.task import TaskRepository
 from src.repositories.user import UserRepository
 from src.services.command_executor import CommandExecutor
@@ -23,6 +23,34 @@ from src.utils.formatters import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def get_forward_author(message: Message) -> str | None:
+    """Extract forward author name from message.
+    
+    Args:
+        message: Telegram message
+        
+    Returns:
+        Author name or None if not a forwarded message
+    """
+    # Check new API (aiogram 3.x)
+    if message.forward_origin:
+        # MessageOriginUser - regular user
+        if hasattr(message.forward_origin, 'sender_user') and message.forward_origin.sender_user:
+            return message.forward_origin.sender_user.full_name
+        # MessageOriginHiddenUser - hidden user
+        elif hasattr(message.forward_origin, 'sender_user_name'):
+            return message.forward_origin.sender_user_name or "Скрытый пользователь"
+        # MessageOriginChannel/Chat
+        elif hasattr(message.forward_origin, 'chat') and message.forward_origin.chat:
+            return message.forward_origin.chat.title
+
+    # Check old API (for compatibility)
+    elif message.forward_from:
+        return message.forward_from.full_name
+
+    return None
 
 # Create router for messages
 message_router = Router(name="messages")
@@ -73,9 +101,18 @@ async def handle_text_message(
                         logger.warning(f"Failed to auto-delete previous task: {e}")
                         # Continue with new task creation even if deletion fails
 
+        # Extract forward author if this is a forwarded message
+        forward_author = get_forward_author(message)
+        if forward_author:
+            logger.info(f"Processing forwarded message from: {forward_author}")
+
         # Parse intent with OpenAI
         openai_service = OpenAIService()
-        intent = await openai_service.parse_intent(message.text, user_language=user.language_code)
+        intent = await openai_service.parse_intent(
+            message.text,
+            user_language=user.language_code,
+            forward_author=forward_author
+        )
 
         # Route based on intent type
         if isinstance(intent, TaskCreation):
@@ -91,6 +128,15 @@ async def handle_text_message(
                 else:
                     project_id = None
 
+                # Parse due_string if present
+                parsed_due_string = task.due_string
+                if task.due_string:
+                    parsed_due_string = await openai_service.parse_date_only(
+                        task.due_string,
+                        user_language=user.language_code
+                    )
+                    logger.info(f"Parsed due_string: '{task.due_string}' -> '{parsed_due_string}'")
+
                 # Create the task
                 todoist_task = await todoist.create_task(
                     content=task.content,
@@ -98,7 +144,7 @@ async def handle_text_message(
                     project_id=project_id,
                     labels=task.labels,
                     priority=task.priority or 1,
-                    due_string=task.due_string,
+                    due_string=parsed_due_string,
                     duration=task.duration,
                 )
 
@@ -215,9 +261,18 @@ async def handle_voice_message(message: Message, bot: Bot, user: "User", todoist
         # Update message with transcribed text
         await processing_msg.edit_text(f"📝 Распознано: {text}\n\n" "⏳ Создаю задачу...")
 
+        # Extract forward author if this is a forwarded message
+        forward_author = get_forward_author(message)
+        if forward_author:
+            logger.info(f"Processing forwarded voice message from: {forward_author}")
+
         # Process transcribed text through OpenAI for intent
         openai_service = OpenAIService()
-        intent = await openai_service.parse_intent(text, user_language=user.language_code)
+        intent = await openai_service.parse_intent(
+            text,
+            user_language=user.language_code,
+            forward_author=forward_author
+        )
 
         # Route based on intent type
         if isinstance(intent, TaskCreation):
@@ -232,13 +287,22 @@ async def handle_voice_message(message: Message, bot: Bot, user: "User", todoist
                 else:
                     project_id = None
 
+                # Parse due_string if present
+                parsed_due_string = task.due_string
+                if task.due_string:
+                    parsed_due_string = await openai_service.parse_date_only(
+                        task.due_string,
+                        user_language=user.language_code
+                    )
+                    logger.info(f"Parsed due_string: '{task.due_string}' -> '{parsed_due_string}'")
+
                 todoist_task = await todoist.create_task(
                     content=task.content,
                     description=task.description,
                     project_id=project_id,
                     labels=task.labels,
                     priority=task.priority or 1,
-                    due_string=task.due_string,
+                    due_string=parsed_due_string,
                     duration=task.duration,
                 )
 

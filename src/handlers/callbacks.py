@@ -4,7 +4,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery
 
 from src.core.database import get_database
 from src.core.exceptions import BotError
@@ -124,25 +124,26 @@ async def handle_edit_task(
     todoist_token: str
 ) -> None:
     """Handle edit task callback."""
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
     from src.handlers.states import EditTaskStates
-    
+
     # Parse callback data
     parts = callback.data.split(":")
     if len(parts) != 3:
         await callback.answer("❌ Неверный формат данных", show_alert=True)
         return
-    
+
     _, task_id_str, todoist_id = parts
     task_id = int(task_id_str)
-    
+
     # Save task info to state
     await state.update_data(
         task_id=task_id,
         todoist_id=todoist_id,
         todoist_token=todoist_token
     )
-    
+
     # Create edit options keyboard
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📝 Изменить текст", callback_data="edit_field:content")],
@@ -150,10 +151,10 @@ async def handle_edit_task(
         [InlineKeyboardButton(text="🔴 Изменить приоритет", callback_data="edit_field:priority")],
         [InlineKeyboardButton(text="❌ Отмена", callback_data="edit_cancel")]
     ])
-    
+
     # Set state
     await state.set_state(EditTaskStates.choosing_field)
-    
+
     # Edit message
     if callback.message:
         await callback.message.edit_text(
@@ -162,7 +163,7 @@ async def handle_edit_task(
             parse_mode="HTML",
             reply_markup=keyboard
         )
-    
+
     await callback.answer()
 
 
@@ -217,19 +218,20 @@ async def handle_edit_field_choice(
     state: FSMContext
 ) -> None:
     """Handle field selection for editing."""
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
     from src.handlers.states import EditTaskStates
-    
+
     field = callback.data.split(":")[1]
-    
+
     # Update state with chosen field
     await state.update_data(edit_field=field)
-    
+
     # Create cancel keyboard
     cancel_keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ Отмена", callback_data="edit_cancel")]
     ])
-    
+
     # Set appropriate state and prompt
     if field == "content":
         await state.set_state(EditTaskStates.editing_content)
@@ -251,14 +253,14 @@ async def handle_edit_field_choice(
     else:
         await callback.answer("❌ Неизвестное поле", show_alert=True)
         return
-    
+
     if callback.message:
         await callback.message.edit_text(
             prompt,
             parse_mode="HTML",
             reply_markup=cancel_keyboard
         )
-    
+
     await callback.answer()
 
 
@@ -270,11 +272,11 @@ async def handle_edit_cancel(
     """Handle edit cancellation."""
     # Clear state
     await state.clear()
-    
+
     # Delete message
     if callback.message:
         await callback.message.delete()
-    
+
     await callback.answer("✅ Редактирование отменено")
 
 
@@ -286,43 +288,43 @@ async def handle_priority_selection(
     """Handle priority selection."""
     from src.services.todoist_service import TodoistService
     from src.utils.formatters import format_error_message
-    
+
     priority = int(callback.data.split(":")[1])
-    
+
     # Get state data
     data = await state.get_data()
     todoist_id = data.get("todoist_id")
     todoist_token = data.get("todoist_token")
-    
+
     if not todoist_id or not todoist_token:
         await callback.answer("❌ Ошибка: данные задачи не найдены", show_alert=True)
         await state.clear()
         return
-    
+
     try:
         # Update task in Todoist
         async with TodoistService(todoist_token) as todoist:
             await todoist.update_task(todoist_id, priority=priority)
-        
+
         # Clear state
         await state.clear()
-        
+
         # Update message
         priority_text = {
             1: "⚪ Без приоритета",
             2: "🔵 Низкий",
-            3: "🟡 Средний", 
+            3: "🟡 Средний",
             4: "🔴 Высокий"
         }
-        
+
         if callback.message:
             await callback.message.edit_text(
                 f"✅ Приоритет задачи изменен на: {priority_text.get(priority, 'Неизвестный')}",
                 parse_mode="HTML"
             )
-        
+
         await callback.answer("✅ Приоритет обновлен")
-        
+
     except BotError as e:
         logger.warning(f"Bot error updating priority: {e}")
         await callback.answer(format_error_message(e), show_alert=True)

@@ -31,7 +31,7 @@ class User(Base):
     # Statistics
     tasks_created: Mapped[int] = mapped_column(default=0)
     last_task_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    
+
     # Settings
     auto_delete_previous: Mapped[bool] = mapped_column(default=False)
 

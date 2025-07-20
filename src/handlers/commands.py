@@ -78,10 +78,11 @@ async def cmd_help(message: Message) -> None:
 @command_router.message(Command("setup"))
 async def cmd_setup(message: Message, state: FSMContext) -> None:
     """Handle /setup command - start token setup."""
-    from aiogram.types import FSInputFile
-    from pathlib import Path
     import os
-    
+    from pathlib import Path
+
+    from aiogram.types import FSInputFile
+
     await state.set_state(SetupStates.waiting_for_token)
 
     # Send instruction image first
@@ -89,7 +90,7 @@ async def cmd_setup(message: Message, state: FSMContext) -> None:
     logger.info(f"Looking for image at: {image_path}")
     logger.info(f"Image exists: {image_path.exists()}")
     logger.info(f"Current working directory: {os.getcwd()}")
-    
+
     if image_path.exists():
         photo = FSInputFile(str(image_path))
         await message.answer_photo(
@@ -267,18 +268,18 @@ async def handle_autodelete(
         return
 
     user_id = message.from_user.id
-    
+
     # Toggle the setting
     db = get_database()
     async with db.get_session() as session:
         user_repo = UserRepository(session)
-        
+
         # Toggle auto_delete_previous setting
         user.auto_delete_previous = not user.auto_delete_previous
         await user_repo.update(user)
-        
+
         status = "включено ✅" if user.auto_delete_previous else "выключено ❌"
-        
+
         await message.answer(
             f"🗑 Автоудаление предыдущей задачи {status}\n\n"
             f"{'Теперь при создании новой задачи предыдущая будет автоматически удаляться.' if user.auto_delete_previous else 'Все созданные задачи будут сохраняться.'}"
@@ -332,7 +333,7 @@ async def handle_recent(
 async def handle_cancel(message: Message, state: FSMContext) -> None:
     """Cancel current operation."""
     current_state = await state.get_state()
-    
+
     if current_state:
         await state.clear()
         await message.answer("❌ Операция отменена")
