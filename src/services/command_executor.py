@@ -88,6 +88,47 @@ class CommandExecutor:
 
             if not tasks:
                 return f"{title}\n\n<i>Задач не найдено</i>"
+            
+            # Debug: log raw task data
+            import json
+            logger.info(f"Raw tasks data ({len(tasks)} tasks): {json.dumps(tasks, indent=2, ensure_ascii=False)}")
+            
+            # Sort tasks by due time
+            def get_sort_key(task):
+                from datetime import timezone
+                
+                due = task.get("due")
+                if not due:
+                    # Return max datetime with timezone info
+                    return datetime.max.replace(tzinfo=timezone.utc)
+                
+                due_time = due.get("datetime", "")
+                if due_time:
+                    try:
+                        # Todoist returns datetime without timezone info for local times
+                        if due_time.endswith("Z"):
+                            return datetime.fromisoformat(due_time.replace("Z", "+00:00"))
+                        else:
+                            # Assume UTC for datetime without timezone
+                            dt = datetime.fromisoformat(due_time)
+                            if dt.tzinfo is None:
+                                dt = dt.replace(tzinfo=timezone.utc)
+                            return dt
+                    except:
+                        pass
+                
+                # For tasks with only date, use start of day in UTC
+                due_date = due.get("date", "")
+                if due_date:
+                    try:
+                        dt = datetime.fromisoformat(f"{due_date}T00:00:00")
+                        return dt.replace(tzinfo=timezone.utc)
+                    except:
+                        pass
+                
+                return datetime.max.replace(tzinfo=timezone.utc)
+            
+            tasks.sort(key=get_sort_key)
 
             # Format response
             response = f"<b>{title}</b>\n\n"
@@ -110,8 +151,16 @@ class CommandExecutor:
                         # Parse and format datetime
                         try:
                             dt = datetime.fromisoformat(due_time.replace("Z", "+00:00"))
-                            due_str = f" 📅 {dt.strftime('%d.%m %H:%M')}"
-                        except:
+                            # Convert to Tashkent timezone (+5 hours)
+                            from datetime import timezone, timedelta
+                            tashkent_tz = timezone(timedelta(hours=5))
+                            local_dt = dt.astimezone(tashkent_tz)
+                            due_str = f" 📅 {local_dt.strftime('%d.%m %H:%M')}"
+                            
+                            # Log time conversion for debugging
+                            logger.info(f"Task '{content}': UTC time {dt.strftime('%H:%M')} -> Local time {local_dt.strftime('%H:%M')}")
+                        except Exception as e:
+                            logger.error(f"Error parsing datetime for task '{content}': {e}")
                             due_str = f" 📅 {due_date}"
                     elif due_date:
                         due_str = f" 📅 {due_date}"
