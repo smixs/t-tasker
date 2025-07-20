@@ -195,16 +195,6 @@ def create_task_keyboard(task_id: int, todoist_id: str) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(
-                text="❌ Удалить",
-                callback_data=f"delete_task:{task_id}:{todoist_id}"
-            ),
-            InlineKeyboardButton(
-                text="✅ Готово",
-                callback_data=f"complete_task:{task_id}:{todoist_id}"
-            ),
-        ],
-        [
-            InlineKeyboardButton(
                 text="✏️ Изменить",
                 callback_data=f"edit_task:{task_id}:{todoist_id}"
             ),
