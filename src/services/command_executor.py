@@ -167,8 +167,7 @@ class CommandExecutor:
                     await task_repo.delete_task_record(last_task.id)
 
                     # Get task content for confirmation
-                    task_data = last_task.task_data or {}
-                    content = task_data.get("content", "Задача")
+                    content = last_task.task_content or "Задача"
 
                     return f"✅ Удалена задача: <i>{content}</i>"
                 else:
@@ -223,8 +222,7 @@ class CommandExecutor:
                 )
 
                 # Get task content for confirmation
-                task_data = last_task.task_data or {}
-                original_content = task_data.get("content", "Задача")
+                original_content = last_task.task_content or "Задача"
 
                 updates_text = ", ".join(update_descriptions)
                 return f"✅ Обновлена задача: <i>{original_content}</i>\n\n📝 Изменения: {updates_text}"
@@ -253,8 +251,7 @@ class CommandExecutor:
 
                 if success:
                     # Get task content for confirmation
-                    task_data = last_task.task_data or {}
-                    content = task_data.get("content", "Задача")
+                    content = last_task.task_content or "Задача"
 
                     return f"✅ Выполнена задача: <i>{content}</i>"
                 else:

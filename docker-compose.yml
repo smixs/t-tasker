@@ -34,7 +34,11 @@ services:
       - taskerbot-network
 
   bot:
-    build: .
+    build:
+      context: .
+      args:
+        - CACHEBUST=${CACHEBUST:-1}
+    image: t-tasker-bot:latest
     container_name: taskerbot-bot
     restart: unless-stopped
     env_file: 

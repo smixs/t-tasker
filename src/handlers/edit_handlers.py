@@ -4,6 +4,7 @@ import logging
 from io import BytesIO
 
 from aiogram import Bot, F, Router
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
@@ -110,18 +111,32 @@ async def handle_due_date_edit(message: Message, state: FSMContext) -> None:
     await process_due_date_edit(message.text, state, message)
 
 
-@edit_router.message(F.voice | F.video_note | F.video)
+@edit_router.message(F.voice | F.video_note | F.video, StateFilter(EditTaskStates.editing_content, EditTaskStates.editing_due_date))
 async def handle_voice_in_edit_mode(message: Message, state: FSMContext, bot: Bot) -> None:
     """Handle voice/video messages in any edit state - transcribe and process as text."""
+    # Get current state to determine which field we're editing
+    current_state = await state.get_state()
+    
     try:
-        # Get current state
-        current_state = await state.get_state()
-        if not current_state:
-            # Not in any edit state, ignore
+        # Determine file type and download
+        if message.voice:
+            file_id = message.voice.file_id
+            mime_type = "audio/ogg;codecs=opus"
+        elif message.video_note:
+            # Video notes are not supported yet
+            await message.answer("📹 Видео сообщения пока не поддерживаются в режиме редактирования")
             return
-
+        elif message.video:
+            # Regular videos are not supported yet
+            await message.answer("📹 Видео сообщения пока не поддерживаются в режиме редактирования")
+            return
+        else:
+            # This shouldn't happen with our filter
+            logger.error("Unexpected message type in voice handler")
+            return
+        
         # Download voice file
-        voice_file = await bot.get_file(message.voice.file_id)
+        voice_file = await bot.get_file(file_id)
         voice_buffer = BytesIO()
         await bot.download_file(voice_file.file_path, voice_buffer)
         voice_buffer.seek(0)
@@ -133,7 +148,7 @@ async def handle_voice_in_edit_mode(message: Message, state: FSMContext, bot: Bo
         deepgram_service = DeepgramService()
         transcript = await deepgram_service.transcribe_audio(
             audio_data=voice_buffer.getvalue(),
-            mime_type="audio/ogg;codecs=opus",
+            mime_type=mime_type,
             filename="voice.ogg"
         )
 

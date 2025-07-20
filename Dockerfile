@@ -21,6 +21,9 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies
 RUN uv sync --frozen --no-dev
 
+# Add cache-busting argument
+ARG CACHEBUST=1
+
 # Copy application code
 COPY src ./src
 

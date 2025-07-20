@@ -105,19 +105,30 @@ async def handle_text_message(
         forward_author = get_forward_author(message)
         if forward_author:
             logger.info(f"Processing forwarded message from: {forward_author}")
+            logger.debug(f"Full message text: {message.text}")
+            logger.debug(f"Forward origin: {message.forward_origin}")
+        else:
+            logger.debug("Not a forwarded message")
 
         # Parse intent with OpenAI
         openai_service = OpenAIService()
         intent = await openai_service.parse_intent(
             message.text,
             user_language=user.language_code,
-            forward_author=forward_author
+            forward_author=None  # Don't pass forward_author to OpenAI anymore
         )
 
         # Route based on intent type
         if isinstance(intent, TaskCreation):
             # Existing task creation logic
             task = intent.task
+            
+            # If this is a forwarded message, add author to task content
+            if forward_author:
+                task.content = f"{forward_author}: {task.content}"
+                logger.info(f"Modified forwarded task - content: '{task.content}'")
+            
+            logger.info(f"Task parsed - content: '{task.content}', due_string: '{task.due_string}'")
 
             # Create task in Todoist
             async with TodoistService(todoist_token) as todoist:
@@ -271,13 +282,18 @@ async def handle_voice_message(message: Message, bot: Bot, user: "User", todoist
         intent = await openai_service.parse_intent(
             text,
             user_language=user.language_code,
-            forward_author=forward_author
+            forward_author=None  # Don't pass forward_author to OpenAI anymore
         )
 
         # Route based on intent type
         if isinstance(intent, TaskCreation):
             # Existing task creation logic
             task = intent.task
+            
+            # If this is a forwarded message, add author to task content
+            if forward_author:
+                task.content = f"{forward_author}: {task.content}"
+                logger.info(f"Modified forwarded voice task - content: '{task.content}'")
 
             # Create task in Todoist
             async with TodoistService(todoist_token) as todoist:

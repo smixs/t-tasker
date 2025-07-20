@@ -167,7 +167,7 @@ CORRECT EXTRACTION EXAMPLES:
         Args:
             message: User message
             user_language: User language code
-            forward_author: Name of the person who forwarded the message (if applicable)
+            forward_author: Deprecated parameter, kept for backward compatibility
 
         Returns:
             Intent object (either TaskCreation or CommandExecution)
@@ -200,6 +200,10 @@ CORRECT EXTRACTION EXAMPLES:
      * "Напомни позвонить маме"
      * "Забрать документы из офиса"
      * "Подготовить презентацию к понедельнику"
+   
+   Правила извлечения полей задачи:
+   - content: основной текст задачи (обязательно)
+   - due_string: дата/время выполнения на английском ("today", "tomorrow", "mar 15 at 14:00")
 
 2. КОМАНДА УПРАВЛЕНИЯ (type: "command"):
    - view_tasks: просмотр существующих задач
@@ -226,28 +230,7 @@ CORRECT EXTRACTION EXAMPLES:
 ВАЖНО: Если сомневаешься между созданием и командой, выбирай создание задачи.
 """
 
-            # Add forward author context if provided
-            if forward_author:
-                system_prompt = base_prompt + f"""
-
-ВАЖНО: ПЕРЕСЛАННОЕ СООБЩЕНИЕ!
-Это сообщение переслано от другого человека: {forward_author}
-
-При создании задачи из ПЕРЕСЛАННОГО сообщения:
-- Это сообщение/просьба/задание исходит ОТ {forward_author} (не от текущего пользователя!)
-- ОБЯЗАТЕЛЬНО включи имя {forward_author} в текст задачи, чтобы было понятно, от кого это
-- НЕ создавай задачу от имени пользователя - укажи реального автора {forward_author}
-
-Примеры правильной обработки ПЕРЕСЛАННЫХ сообщений:
-  * "Встреча завтра" от Ивана → content: "Встреча с Иваном завтра"
-  * "Нужен отчет" от начальника → content: "Отчет для начальника"
-  * "Созвон в 15:00" от Анны → content: "Созвон с Анной в 15:00"
-  * "Сергей, надо работу" от Виолетты → content: "Работа от Виолетты для Сергея"
-  
-Помни: обычные сообщения (не пересланные) обрабатываются как есть, без добавления автора!
-"""
-            else:
-                system_prompt = base_prompt
+            system_prompt = base_prompt
         else:
             base_prompt = """
 You are an intelligent intent classifier for a Todoist bot.
@@ -290,30 +273,12 @@ CLASSIFICATION RULES:
 IMPORTANT: When in doubt between creation and command, choose task creation.
 """
 
-            # Add forward author context if provided
-            if forward_author:
-                system_prompt = base_prompt + f"""
-
-IMPORTANT: FORWARDED MESSAGE!
-This message is forwarded from another person: {forward_author}
-
-When creating a task from a FORWARDED message:
-- This message/request/task originates FROM {forward_author} (not from the current user!)
-- ALWAYS include {forward_author}'s name in the task text to clarify who it's from
-- DO NOT create the task as if from the user - indicate the real author {forward_author}
-
-Examples of correct FORWARDED message processing:
-  * "Meeting tomorrow" from Ivan → content: "Meeting with Ivan tomorrow"
-  * "Need report" from manager → content: "Report for manager"
-  * "Call at 3:00 PM" from Anna → content: "Call with Anna at 3:00 PM"
-  * "John, need work done" from Violet → content: "Work from Violet for John"
-  
-Remember: regular messages (not forwarded) are processed as-is, without adding any author!
-"""
-            else:
-                system_prompt = base_prompt
+            system_prompt = base_prompt
 
         try:
+            # Log what we're sending to OpenAI
+            logger.info(f"Sending to OpenAI - message: '{filtered_message[:100]}...'")
+            
             # Create messages
             messages: list[ChatCompletionMessageParam] = [
                 {"role": "system", "content": system_prompt},
