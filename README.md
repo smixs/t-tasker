@@ -1,3 +1,6 @@
+
+<img width="1024" height="1024" alt="t-tasker" src="https://github.com/user-attachments/assets/2ae5238d-925f-49d0-a355-b3cf7e19c613" />
+
 # 🎯 T-Tasker - Telegram-бот для Todoist с естественными командами
 
 <p align="center">
