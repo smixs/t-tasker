@@ -150,17 +150,26 @@ class CommandExecutor:
                     if due_time:
                         # Parse and format datetime
                         try:
-                            dt = datetime.fromisoformat(due_time.replace("Z", "+00:00"))
-                            # Convert to Tashkent timezone (+5 hours)
-                            from datetime import timezone, timedelta
-                            tashkent_tz = timezone(timedelta(hours=5))
-                            local_dt = dt.astimezone(tashkent_tz)
-                            due_str = f" 📅 {local_dt.strftime('%d.%m %H:%M')}"
+                            # Log raw datetime for debugging
+                            logger.info(f"Task '{content}': raw datetime = '{due_time}'")
                             
-                            # Log time conversion for debugging
-                            logger.info(f"Task '{content}': UTC time {dt.strftime('%H:%M')} -> Local time {local_dt.strftime('%H:%M')}")
+                            # Parse datetime - Todoist usually sends without timezone for user's local time
+                            if due_time.endswith("Z"):
+                                # UTC time - needs conversion
+                                dt = datetime.fromisoformat(due_time.replace("Z", "+00:00"))
+                                # Convert to Tashkent timezone (+5 hours)
+                                from datetime import timezone, timedelta
+                                tashkent_tz = timezone(timedelta(hours=5))
+                                local_dt = dt.astimezone(tashkent_tz)
+                                due_str = f" 📅 {local_dt.strftime('%d.%m %H:%M')}"
+                                logger.info(f"Task '{content}': Converted UTC {dt.strftime('%H:%M')} -> Local {local_dt.strftime('%H:%M')}")
+                            else:
+                                # Already in local time - just format
+                                dt = datetime.fromisoformat(due_time)
+                                due_str = f" 📅 {dt.strftime('%d.%m %H:%M')}"
+                                logger.info(f"Task '{content}': Using local time {dt.strftime('%H:%M')}")
                         except Exception as e:
-                            logger.error(f"Error parsing datetime for task '{content}': {e}")
+                            logger.error(f"Error parsing datetime for task '{content}': {e}, due_time='{due_time}'")
                             due_str = f" 📅 {due_date}"
                     elif due_date:
                         due_str = f" 📅 {due_date}"
