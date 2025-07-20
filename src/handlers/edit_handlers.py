@@ -1,13 +1,15 @@
 """Edit mode message handlers for FSM states."""
 
 import logging
+from io import BytesIO
 
-from aiogram import Router
+from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from src.core.exceptions import BotError
+from src.core.exceptions import BotError, TranscriptionError
 from src.handlers.states import EditTaskStates
+from src.services.deepgram_service import DeepgramService
 from src.services.openai_service import OpenAIService
 from src.services.todoist_service import TodoistService
 from src.utils.formatters import format_error_message
@@ -18,13 +20,8 @@ logger = logging.getLogger(__name__)
 edit_router = Router(name="edit")
 
 
-@edit_router.message(EditTaskStates.editing_content)
-async def handle_content_edit(message: Message, state: FSMContext) -> None:
-    """Handle text input for content editing."""
-    if not message.text:
-        await message.answer("❌ Пожалуйста, введите текст задачи")
-        return
-
+async def process_content_edit(text: str, state: FSMContext, message: Message) -> None:
+    """Process content edit logic - can be called from text or voice handlers."""
     # Get state data
     data = await state.get_data()
     todoist_id = data.get("todoist_id")
@@ -38,13 +35,13 @@ async def handle_content_edit(message: Message, state: FSMContext) -> None:
     try:
         # Update task in Todoist
         async with TodoistService(todoist_token) as todoist:
-            await todoist.update_task(todoist_id, content=message.text)
+            await todoist.update_task(todoist_id, content=text)
 
         # Clear state
         await state.clear()
 
         # Send success message
-        await message.answer(f"✅ Текст задачи обновлен:\n\n<b>{message.text}</b>", parse_mode="HTML")
+        await message.answer(f"✅ Текст задачи обновлен:\n\n<b>{text}</b>", parse_mode="HTML")
 
     except BotError as e:
         logger.warning(f"Bot error updating content: {e}")
@@ -56,13 +53,18 @@ async def handle_content_edit(message: Message, state: FSMContext) -> None:
         await state.clear()
 
 
-@edit_router.message(EditTaskStates.editing_due_date)
-async def handle_due_date_edit(message: Message, state: FSMContext) -> None:
-    """Handle text input for due date editing."""
+@edit_router.message(EditTaskStates.editing_content)
+async def handle_content_edit(message: Message, state: FSMContext) -> None:
+    """Handle text input for content editing."""
     if not message.text:
-        await message.answer("❌ Пожалуйста, введите дату")
+        await message.answer("❌ Пожалуйста, введите текст задачи")
         return
 
+    await process_content_edit(message.text, state, message)
+
+
+async def process_due_date_edit(text: str, state: FSMContext, message: Message) -> None:
+    """Process due date edit logic - can be called from text or voice handlers."""
     # Get state data
     data = await state.get_data()
     todoist_id = data.get("todoist_id")
@@ -76,7 +78,7 @@ async def handle_due_date_edit(message: Message, state: FSMContext) -> None:
     try:
         # Parse date using OpenAI without intent classification
         openai_service = OpenAIService()
-        parsed_date = await openai_service.parse_date_only(message.text)
+        parsed_date = await openai_service.parse_date_only(text)
 
         # Update task in Todoist
         async with TodoistService(todoist_token) as todoist:
@@ -96,3 +98,61 @@ async def handle_due_date_edit(message: Message, state: FSMContext) -> None:
         await message.answer("❌ Произошла ошибка при обновлении даты")
     finally:
         await state.clear()
+
+
+@edit_router.message(EditTaskStates.editing_due_date)
+async def handle_due_date_edit(message: Message, state: FSMContext) -> None:
+    """Handle text input for due date editing."""
+    if not message.text:
+        await message.answer("❌ Пожалуйста, введите дату")
+        return
+
+    await process_due_date_edit(message.text, state, message)
+
+
+@edit_router.message(F.voice | F.video_note | F.video)
+async def handle_voice_in_edit_mode(message: Message, state: FSMContext, bot: Bot) -> None:
+    """Handle voice/video messages in any edit state - transcribe and process as text."""
+    try:
+        # Get current state
+        current_state = await state.get_state()
+        if not current_state:
+            # Not in any edit state, ignore
+            return
+
+        # Download voice file
+        voice_file = await bot.get_file(message.voice.file_id)
+        voice_buffer = BytesIO()
+        await bot.download_file(voice_file.file_path, voice_buffer)
+        voice_buffer.seek(0)
+
+        # Send typing action
+        await message.chat.do("typing")
+
+        # Transcribe audio
+        deepgram_service = DeepgramService()
+        transcript = await deepgram_service.transcribe_audio(
+            audio_data=voice_buffer.getvalue(),
+            mime_type="audio/ogg;codecs=opus",
+            filename="voice.ogg"
+        )
+
+        if not transcript:
+            await message.answer("❌ Не удалось распознать голосовое сообщение")
+            return
+
+        # Show transcribed text to user
+        await message.answer(f"🎤 Распознано: <i>{transcript}</i>", parse_mode="HTML")
+
+        # Process based on current state
+        if current_state == EditTaskStates.editing_content:
+            await process_content_edit(transcript, state, message)
+        elif current_state == EditTaskStates.editing_due_date:
+            await process_due_date_edit(transcript, state, message)
+
+    except TranscriptionError as e:
+        logger.warning(f"Transcription error in edit mode: {e}")
+        await message.answer("❌ Ошибка распознавания голоса. Попробуйте ещё раз или введите текстом.")
+    except Exception as e:
+        logger.error(f"Unexpected error handling voice in edit mode: {e}", exc_info=True)
+        await message.answer("❌ Произошла ошибка при обработке голосового сообщения")
