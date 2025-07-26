@@ -1,7 +1,9 @@
 """OpenAI service for task parsing using Instructor."""
 
 import logging
+from pathlib import Path
 
+import dspy
 import instructor
 from better_profanity import profanity
 from openai import AsyncOpenAI
@@ -10,8 +12,9 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.core.exceptions import OpenAIError, ValidationError
 from src.core.settings import Settings, get_settings
-from src.models.intent import Intent, IntentWrapper, TaskCreation
+from src.models.intent import CommandExecution, Intent, IntentWrapper, TaskCreation
 from src.models.task import TaskSchema
+from src.services.dspy_parser import RealWorldTodoistParser, is_complex_message
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +34,33 @@ class OpenAIService:
         self.settings = settings or get_settings()
 
         # Initialize OpenAI client
-        self.client = AsyncOpenAI(api_key=self.settings.openai_key, timeout=self.settings.openai_timeout)
+        self.client = AsyncOpenAI(api_key=self.settings.openai_api_key.get_secret_value(), timeout=self.settings.openai_timeout)
 
         # Apply instructor patch for structured outputs
         self.instructor_client = instructor.patch(self.client, mode=instructor.Mode.TOOLS)
+        
+        # Initialize DSPy parser if enabled
+        self.dspy_parser = None
+        if self.settings.use_dspy_parser:
+            try:
+                # Configure DSPy
+                dspy.configure(lm=dspy.LM(
+                    f"openai/{self.settings.openai_model}",
+                    api_key=self.settings.openai_api_key.get_secret_value()
+                ))
+                
+                # Load optimized parser
+                model_path = Path(self.settings.dspy_parser_model_path)
+                if model_path.exists():
+                    self.dspy_parser = RealWorldTodoistParser()
+                    self.dspy_parser.load(str(model_path))
+                    logger.info(f"DSPy parser loaded from {model_path}")
+                else:
+                    logger.warning(f"DSPy model not found at {model_path}, using legacy parser")
+                    self.settings.use_dspy_parser = False
+            except Exception as e:
+                logger.error(f"Failed to initialize DSPy parser: {e}")
+                self.settings.use_dspy_parser = False
 
         logger.info("OpenAI service initialized")
 
@@ -70,11 +96,43 @@ class OpenAIService:
         # Check if message is too short
         if len(filtered_message.strip()) < 3:
             raise ValidationError("Message is too short", field="message")
+        
+        # Decide whether to use DSPy parser
+        use_dspy = self.settings.use_dspy_parser and self.dspy_parser is not None
+        
+        # For complex messages, always use DSPy if available
+        if use_dspy and is_complex_message(filtered_message):
+            return await self._parse_task_dspy(filtered_message, user_language)
+        
+        # For simple messages or when DSPy is disabled, use legacy
+        return await self._parse_task_legacy(filtered_message, user_language)
+    
+    async def _parse_task_dspy(self, message: str, user_language: str = "ru") -> TaskSchema:
+        """Parse task using DSPy parser."""
+        try:
+            # Use DSPy parser
+            task_schema = self.dspy_parser.parse_task(
+                message=message,
+                user_language=user_language
+            )
+            
+            logger.info(f"Successfully parsed task with DSPy: {task_schema.content}")
+            logger.info(f"DSPy parser added tags: {task_schema.labels}")
+            
+            return task_schema
+            
+        except Exception as e:
+            logger.error(f"DSPy parsing failed: {e}")
+            # Fallback to legacy method
+            return await self._parse_task_legacy(message, user_language)
+    
+    async def _parse_task_legacy(self, message: str, user_language: str = "ru") -> TaskSchema:
+        """Parse task using legacy prompt-based method."""
 
         # Prepare system prompt based on language
         if user_language == "ru":
             system_prompt = """
-Ты - помощник для создания задач в Todoist. Извлеки информацию о задаче из сообщения пользователя.
+Ты - помощник для создания задач в Todoist. Обработай входящее сообщение пользователя для извлечения ключевых компонентов задачи, включая краткое содержание задачи, подробное описание, дату выполнения, соответствующие сущности и тип действия. Обеспечь ясность и краткость в выводе.
 
 ПРИОРИТЕТ ИЗВЛЕЧЕНИЯ ДАТ:
 1. Абсолютные даты и время (15 марта, 20.03.2025, в 14:00) - ВСЕГДА приоритет
@@ -82,8 +140,8 @@ class OpenAIService:
 3. При наличии и абсолютной и относительной даты - ИГНОРИРОВАТЬ относительную
 
 Правила извлечения:
-1. content - основной текст задачи (обязательно)
-2. description - дополнительное описание (если есть)  
+1. content - КРАТКАЯ СУТЬ задачи (максимум 100 символов). Сократи длинные сообщения до главной сути действия
+2. description - ПОЛНЫЙ КОНТЕКСТ, включая все детали, списки, имена - сохрани как есть
 3. due_string - КОНВЕРТИРОВАТЬ В АНГЛИЙСКИЙ ФОРМАТ:
    - Дни недели: "понедельник"→"monday", "вторник"→"tuesday", "среда"→"wednesday", "четверг"→"thursday", "пятница"→"friday", "суббота"→"saturday", "воскресенье"→"sunday"
    - Месяцы: "января"→"jan", "февраля"→"feb", "марта"→"mar", "апреля"→"apr", "мая"→"may", "июня"→"jun", "июля"→"jul", "августа"→"aug", "сентября"→"sep", "октября"→"oct", "ноября"→"nov", "декабря"→"dec"
@@ -96,16 +154,34 @@ class OpenAIService:
    - "завтра в 15:00 по Ташкенту" → "tomorrow at 15:00"
 4. priority - приоритет: 1 (обычный), 2 (средний), 3 (высокий), 4 (срочный)
 5. project_name - название проекта (если указано)
-6. labels - метки/теги (если есть)
+6. labels - умные теги на основе контекста:
+   - Извлеки имена людей, компании, проекты как теги
+   - Добавь тип действия: встреча, звонок, документ, решение, проверка
+   - Для финансовых тем: кредит, бюджет, финансы
+   - Максимум 5 тегов
 7. recurrence - повторение (каждый день, каждую неделю)
 8. duration - длительность в минутах (если указано)
 
 ПРИМЕРЫ ПРАВИЛЬНОГО ИЗВЛЕЧЕНИЯ:
-- "Встреча завтра 15 марта в 14:00" → due_string: "mar 15 at 14:00" (НЕ "tomorrow")
-- "Позвонить клиенту послезавтра 20.03 в 10:00" → due_string: "mar 20 at 10:00"
-- "Сделать отчет завтра" → due_string: "tomorrow" (нет абсолютной даты)
-- "Встреча в офисе 25 марта" → due_string: "mar 25"
-- "В четверг в 12:00 по Минску встреча" → due_string: "thursday at 12:00" (БЕЗ "по Минску")
+
+Пример 1:
+Сообщение: "Звонила Островской из IBT. Новости подтвердились. Она в сентябре уходит и будет новый директор. Обещала поделиться контактами, чтобы мы могли встретиться"
+content: "Встретиться с новым директором IBT"
+description: "Звонила Островской из IBT. Новости подтвердились. Она в сентябре уходит и будет новый директор. Обещала поделиться контактами"
+labels: ["встреча", "IBT", "Островская", "контакты"]
+
+Пример 2:
+Сообщение: "Не обсудили сегодня статус по открытию юр лица: 1. Проработка драфта документов Нестле-WUNDER. 2. Подписант - Дарья готова. 3. Надо определить учредителей. Дедлайн пятница"
+content: "Обсудить статус открытия юрлица"
+description: "Не обсудили сегодня статус по открытию юр лица: 1. Проработка драфта документов Нестле-WUNDER. 2. Подписант - Дарья готова. 3. Надо определить учредителей"
+due_string: "friday"
+labels: ["юрлицо", "документы", "NESTLE", "WUNDER", "срочно"]
+
+Пример 3:
+Сообщение: "Позвонить в банк Сбербанк по поводу кредита для компании ООО Ромашка"
+content: "Позвонить в Сбербанк по кредиту для ООО Ромашка"
+description: "Позвонить в банк Сбербанк по поводу кредита для компании ООО Ромашка"
+labels: ["звонок", "Сбербанк", "кредит", "ООО Ромашка", "финансы"]
 """
         else:
             system_prompt = """

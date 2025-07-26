@@ -29,6 +29,7 @@ dependencies = [
     "opentelemetry-sdk==1.29.0",
     "opentelemetry-instrumentation>=0.50b0",
     "prometheus-client==0.21.1",
+    "dspy>=2.6.27",
 ]
 
 [tool.ruff]

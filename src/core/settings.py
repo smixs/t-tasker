@@ -48,6 +48,16 @@ class Settings(BaseSettings):
         default=450,
         description="Todoist API rate limit requests (conservative limit)"
     )
+    
+    # DSPy Parser Configuration
+    use_dspy_parser: bool = Field(
+        default=False,  # Start with A/B testing
+        description="Use DSPy parser instead of legacy prompts"
+    )
+    dspy_parser_model_path: str = Field(
+        default="models/todoist_parser_v1.json",
+        description="Path to optimized DSPy parser model"
+    )
     todoist_rate_limit_window: int = Field(
         default=900,  # 15 minutes
         description="Todoist API rate limit window in seconds"

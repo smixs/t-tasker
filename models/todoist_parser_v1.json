@@ -1,0 +1,281 @@
+{
+  "extract.predict": {
+    "traces": [],
+    "train": [],
+    "demos": [
+      {
+        "message": "Звонила Островской Валерии из IBT. Новости подтвердились. \n        Она в сентябре уходит и будет новый марк дир. Обещала поделиться контактами, \n        чтобы мы могли с ней встретиться - познакомиться",
+        "content": "Встретиться с новым директором IBT",
+        "description": "Звонила Островской Валерии из IBT. Новости подтвердились. \nОна в сентябре уходит и будет новый марк дир. Обещала поделиться контактами.",
+        "due_string": null,
+        "entities": [
+          "Островская Валерия",
+          "IBT"
+        ],
+        "action_type": "встреча",
+        "tags": [
+          "встреча",
+          "IBT",
+          "контакты"
+        ]
+      },
+      {
+        "message": "Не обсудили сегодня статус по открытию юр лица:\n1. Проработка драфта документов Нестле-WUNDER. Получили ОС от 2 юристов Вундер. Текущие формулировки не подходят под ОКЭД.\n2. Подписант. Обсудила с Дарей возможность стать подписантом. Она готова.\n3. Учредители. Надо определить список учредителей.\nПредлагаю в пт принять финальное решение. Дедлайн: пятница",
+        "content": "Обсудить статус открытия юрлица",
+        "description": "Не обсудили сегодня статус по открытию юр лица:\n1. Проработка драфта документов Нестле-WUNDER. Получили ОС от 2 юристов Вундер. Текущие формулировки не подходят под ОКЭД.\n2. Подписант. Обсудила с Дарей возможность стать подписантом. Она готова.\n3. Учредители. Надо определить список учредителей.\nПредлагаю в пт принять финальное решение.",
+        "due_string": "friday",
+        "entities": [
+          "Nestle",
+          "WUNDER",
+          "Дарья"
+        ],
+        "action_type": "решение",
+        "tags": [
+          "юрлицо",
+          "документы",
+          "NESTLE",
+          "WUNDER",
+          "срочно"
+        ]
+      }
+    ],
+    "signature": {
+      "instructions": "Process the user's input message to extract key components for task creation, including concise task content, detailed description, due date, relevant entities, and action type. Ensure clarity and conciseness in the output.",
+      "fields": [
+        {
+          "prefix": "Message:",
+          "description": "long message, possibly with context"
+        },
+        {
+          "prefix": "User Language:",
+          "description": "language: ru or en"
+        },
+        {
+          "prefix": "Reasoning: Let's think step by step in order to",
+          "description": "${reasoning}"
+        },
+        {
+          "prefix": "Content:",
+          "description": "CONCISE task essence, max 100 chars"
+        },
+        {
+          "prefix": "Description:",
+          "description": "full context, preserve lists as-is"
+        },
+        {
+          "prefix": "Due String:",
+          "description": "date if mentioned, WITHOUT timezone, empty string if no date"
+        },
+        {
+          "prefix": "Entities:",
+          "description": "people, companies, projects from text"
+        },
+        {
+          "prefix": "Action Type:",
+          "description": "action type: встреча\/звонок\/документ\/решение\/проверка"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "generate_tags": {
+    "traces": [],
+    "train": [],
+    "demos": [
+      {
+        "message": "Звонила Островской Валерии из IBT. Новости подтвердились. \n        Она в сентябре уходит и будет новый марк дир. Обещала поделиться контактами, \n        чтобы мы могли с ней встретиться - познакомиться",
+        "content": "Встретиться с новым директором IBT",
+        "description": "Звонила Островской Валерии из IBT. Новости подтвердились. \nОна в сентябре уходит и будет новый марк дир. Обещала поделиться контактами.",
+        "due_string": null,
+        "entities": [
+          "Островская Валерия",
+          "IBT"
+        ],
+        "action_type": "встреча",
+        "tags": [
+          "встреча",
+          "IBT",
+          "контакты"
+        ]
+      },
+      {
+        "message": "Не обсудили сегодня статус по открытию юр лица:\n1. Проработка драфта документов Нестле-WUNDER. Получили ОС от 2 юристов Вундер. Текущие формулировки не подходят под ОКЭД.\n2. Подписант. Обсудила с Дарей возможность стать подписантом. Она готова.\n3. Учредители. Надо определить список учредителей.\nПредлагаю в пт принять финальное решение. Дедлайн: пятница",
+        "content": "Обсудить статус открытия юрлица",
+        "description": "Не обсудили сегодня статус по открытию юр лица:\n1. Проработка драфта документов Нестле-WUNDER. Получили ОС от 2 юристов Вундер. Текущие формулировки не подходят под ОКЭД.\n2. Подписант. Обсудила с Дарей возможность стать подписантом. Она готова.\n3. Учредители. Надо определить список учредителей.\nПредлагаю в пт принять финальное решение.",
+        "due_string": "friday",
+        "entities": [
+          "Nestle",
+          "WUNDER",
+          "Дарья"
+        ],
+        "action_type": "решение",
+        "tags": [
+          "юрлицо",
+          "документы",
+          "NESTLE",
+          "WUNDER",
+          "срочно"
+        ]
+      }
+    ],
+    "signature": {
+      "instructions": "Generate standardized tags based on context.",
+      "fields": [
+        {
+          "prefix": "Content:",
+          "description": "task essence"
+        },
+        {
+          "prefix": "Entities:",
+          "description": "extracted entities"
+        },
+        {
+          "prefix": "Action Type:",
+          "description": "action type"
+        },
+        {
+          "prefix": "Tags:",
+          "description": "standardized tags, max 5"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "normalize_date": {
+    "traces": [],
+    "train": [],
+    "demos": [
+      {
+        "message": "Звонила Островской Валерии из IBT. Новости подтвердились. \n        Она в сентябре уходит и будет новый марк дир. Обещала поделиться контактами, \n        чтобы мы могли с ней встретиться - познакомиться",
+        "content": "Встретиться с новым директором IBT",
+        "description": "Звонила Островской Валерии из IBT. Новости подтвердились. \nОна в сентябре уходит и будет новый марк дир. Обещала поделиться контактами.",
+        "due_string": null,
+        "entities": [
+          "Островская Валерия",
+          "IBT"
+        ],
+        "action_type": "встреча",
+        "tags": [
+          "встреча",
+          "IBT",
+          "контакты"
+        ]
+      },
+      {
+        "message": "Не обсудили сегодня статус по открытию юр лица:\n1. Проработка драфта документов Нестле-WUNDER. Получили ОС от 2 юристов Вундер. Текущие формулировки не подходят под ОКЭД.\n2. Подписант. Обсудила с Дарей возможность стать подписантом. Она готова.\n3. Учредители. Надо определить список учредителей.\nПредлагаю в пт принять финальное решение. Дедлайн: пятница",
+        "content": "Обсудить статус открытия юрлица",
+        "description": "Не обсудили сегодня статус по открытию юр лица:\n1. Проработка драфта документов Нестле-WUNDER. Получили ОС от 2 юристов Вундер. Текущие формулировки не подходят под ОКЭД.\n2. Подписант. Обсудила с Дарей возможность стать подписантом. Она готова.\n3. Учредители. Надо определить список учредителей.\nПредлагаю в пт принять финальное решение.",
+        "due_string": "friday",
+        "entities": [
+          "Nestle",
+          "WUNDER",
+          "Дарья"
+        ],
+        "action_type": "решение",
+        "tags": [
+          "юрлицо",
+          "документы",
+          "NESTLE",
+          "WUNDER",
+          "срочно"
+        ]
+      }
+    ],
+    "signature": {
+      "instructions": "Please take the raw date string provided in the user message and convert it into a standardized format that is compatible with the Todoist API, considering the user's language for accurate interpretation.",
+      "fields": [
+        {
+          "prefix": "Raw Date:",
+          "description": "date from message"
+        },
+        {
+          "prefix": "User Language:",
+          "description": "user language"
+        },
+        {
+          "prefix": "Normalized Date:",
+          "description": "date for Todoist API WITHOUT timezone"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "classify_intent_module.predict": {
+    "traces": [],
+    "train": [],
+    "demos": [
+      {
+        "message": "Не обсудили сегодня статус по открытию юр лица:\n1. Проработка драфта документов Нестле-WUNDER. Получили ОС от 2 юристов Вундер. Текущие формулировки не подходят под ОКЭД.\n2. Подписант. Обсудила с Дарей возможность стать подписантом. Она готова.\n3. Учредители. Надо определить список учредителей.\nПредлагаю в пт принять финальное решение. Дедлайн: пятница",
+        "content": "Обсудить статус открытия юрлица",
+        "description": "Не обсудили сегодня статус по открытию юр лица:\n1. Проработка драфта документов Нестле-WUNDER. Получили ОС от 2 юристов Вундер. Текущие формулировки не подходят под ОКЭД.\n2. Подписант. Обсудила с Дарей возможность стать подписантом. Она готова.\n3. Учредители. Надо определить список учредителей.\nПредлагаю в пт принять финальное решение.",
+        "due_string": "friday",
+        "entities": [
+          "Nestle",
+          "WUNDER",
+          "Дарья"
+        ],
+        "action_type": "решение",
+        "tags": [
+          "юрлицо",
+          "документы",
+          "NESTLE",
+          "WUNDER",
+          "срочно"
+        ]
+      },
+      {
+        "message": "Звонила Островской Валерии из IBT. Новости подтвердились. \n        Она в сентябре уходит и будет новый марк дир. Обещала поделиться контактами, \n        чтобы мы могли с ней встретиться - познакомиться",
+        "content": "Встретиться с новым директором IBT",
+        "description": "Звонила Островской Валерии из IBT. Новости подтвердились. \nОна в сентябре уходит и будет новый марк дир. Обещала поделиться контактами.",
+        "due_string": null,
+        "entities": [
+          "Островская Валерия",
+          "IBT"
+        ],
+        "action_type": "встреча",
+        "tags": [
+          "встреча",
+          "IBT",
+          "контакты"
+        ]
+      }
+    ],
+    "signature": {
+      "instructions": "Analyze the user's message to identify their intent, determining if they wish to create a task or issue a command. Provide the intent type, any specific command type, and the target of the command based on the context of the message.",
+      "fields": [
+        {
+          "prefix": "Message:",
+          "description": "user message"
+        },
+        {
+          "prefix": "User Language:",
+          "description": "user language"
+        },
+        {
+          "prefix": "Reasoning: Let's think step by step in order to",
+          "description": "${reasoning}"
+        },
+        {
+          "prefix": "Intent Type:",
+          "description": "intent type: create_task or command"
+        },
+        {
+          "prefix": "Command Type:",
+          "description": "command type if intent_type=command, empty string if not command"
+        },
+        {
+          "prefix": "Target:",
+          "description": "command target (last\/all\/today\/tomorrow), empty string if not command"
+        }
+      ]
+    },
+    "lm": null
+  },
+  "metadata": {
+    "dependency_versions": {
+      "python": "3.12",
+      "dspy": "2.6.27",
+      "cloudpickle": "3.1"
+    }
+  }
+}
