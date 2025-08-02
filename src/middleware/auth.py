@@ -9,7 +9,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from src.core.database import get_database
-from src.handlers.states import SetupStates
+from src.core.settings import get_settings
+from src.handlers.states import BroadcastStates, SetupStates
 from src.repositories.user import UserRepository
 from src.services.encryption import EncryptionService
 
@@ -23,6 +24,7 @@ class AuthMiddleware(BaseMiddleware):
         """Initialize middleware."""
         self.db = get_database()
         self.encryption = EncryptionService()
+        self.settings = get_settings()
         # Commands that don't require auth
         self.public_commands = {"/start", "/help", "/setup", "/cancel"}
 
@@ -42,8 +44,11 @@ class AuthMiddleware(BaseMiddleware):
             # Check if it's a public command
             if event.text and any(event.text.startswith(cmd) for cmd in self.public_commands):
                 return await handler(event, data)
-
+            
+            # Check if it's admin using /msg command
             user_id = event.from_user.id
+            if user_id == self.settings.admin_id and event.text and event.text.startswith("/msg"):
+                return await handler(event, data)
         elif isinstance(event, CallbackQuery):
             # Callback queries always have from_user
             user_id = event.from_user.id
@@ -51,12 +56,15 @@ class AuthMiddleware(BaseMiddleware):
             # Not a message or callback - pass through
             return await handler(event, data)
 
-        # Check if user is in setup state
+        # Check if user is in setup state or broadcast state
         state: FSMContext = data.get("state")
         if state:
             current_state = await state.get_state()
             if current_state == SetupStates.waiting_for_token.state:
                 # Allow token processing
+                return await handler(event, data)
+            elif current_state == BroadcastStates.waiting_for_message.state and user_id == self.settings.admin_id:
+                # Allow broadcast message processing for admin
                 return await handler(event, data)
 
         # Get user from database

@@ -155,3 +155,12 @@ class UserRepository:
         """
         await self.session.commit()
         logger.info(f"Updated user {user.id}")
+    
+    async def get_all_users(self) -> list[User]:
+        """Get all users from database.
+        
+        Returns:
+            List of all users
+        """
+        result = await self.session.execute(select(User))
+        return list(result.scalars().all())

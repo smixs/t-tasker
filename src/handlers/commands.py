@@ -83,6 +83,20 @@ async def cmd_setup(message: Message, state: FSMContext) -> None:
 
     from aiogram.types import FSInputFile
 
+    if not message.from_user:
+        return
+
+    # Create or update user in database first
+    async with get_database().get_session() as session:
+        user_repo = UserRepository(session)
+        await user_repo.create_or_update(
+            user_id=message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+            last_name=message.from_user.last_name,
+            language_code=message.from_user.language_code
+        )
+
     await state.set_state(SetupStates.waiting_for_token)
 
     # Send instruction image first

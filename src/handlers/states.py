@@ -16,3 +16,9 @@ class EditTaskStates(StatesGroup):
     editing_content = State()
     editing_due_date = State()
     editing_priority = State()
+
+
+class BroadcastStates(StatesGroup):
+    """States for admin broadcast flow."""
+    
+    waiting_for_message = State()

@@ -19,7 +19,7 @@ from src.core.middleware import (
 )
 from src.core.redis_storage import RetryRedisStorage
 from src.core.settings import get_settings
-from src.handlers import callback_router, command_router, edit_router, error_router, message_router
+from src.handlers import admin_router, callback_router, command_router, edit_router, error_router, message_router
 from src.middleware.auth import AuthMiddleware
 
 # Configure logging
@@ -95,6 +95,7 @@ class Application:
 
         # Register routers (order matters - edit_router must be before message_router)
         self.dispatcher.include_router(error_router)
+        self.dispatcher.include_router(admin_router)  # Admin commands have high priority
         self.dispatcher.include_router(command_router)
         self.dispatcher.include_router(edit_router)  # Edit handlers have priority over message handlers
         self.dispatcher.include_router(message_router)

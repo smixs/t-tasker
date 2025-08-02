@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr = Field(
         description="Telegram Bot Token from @BotFather"
     )
+    admin_id: int = Field(
+        description="Telegram user ID for admin commands"
+    )
 
     # OpenAI Configuration
     openai_api_key: SecretStr = Field(
