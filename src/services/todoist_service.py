@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import random
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -17,6 +18,8 @@ class TodoistService:
 
     BASE_URL = "https://api.todoist.com/rest/v2"
     SYNC_URL = "https://api.todoist.com/sync/v9"
+    MAX_RETRIES = 3
+    INITIAL_RETRY_DELAY = 1.0  # seconds
 
     def __init__(self, api_token: str) -> None:
         """Initialize Todoist service.
@@ -45,6 +48,60 @@ class TodoistService:
         if self._client:
             await self._client.aclose()
 
+    async def _make_request_with_retry(
+        self,
+        method: str,
+        url: str,
+        **kwargs: Any
+    ) -> httpx.Response:
+        """Make HTTP request with retry logic for 503 errors.
+        
+        Args:
+            method: HTTP method (GET, POST, etc.)
+            url: Request URL
+            **kwargs: Additional arguments for httpx request
+            
+        Returns:
+            HTTP response
+            
+        Raises:
+            TodoistError: After all retries exhausted
+        """
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                async with self._get_client() as client:
+                    response = await client.request(method, url, **kwargs)
+                    
+                    # If not 503, return response (caller will handle other status codes)
+                    if response.status_code != 503:
+                        return response
+                    
+                    # Handle 503 with retry
+                    if attempt < self.MAX_RETRIES - 1:
+                        delay = self.INITIAL_RETRY_DELAY * (2 ** attempt) + random.uniform(0, 0.1)
+                        logger.warning(
+                            f"Todoist API returned 503, retrying in {delay:.2f}s "
+                            f"(attempt {attempt + 1}/{self.MAX_RETRIES})"
+                        )
+                        await asyncio.sleep(delay)
+                    else:
+                        raise TodoistError("Todoist service temporarily unavailable")
+                        
+            except httpx.RequestError as e:
+                if attempt < self.MAX_RETRIES - 1:
+                    delay = self.INITIAL_RETRY_DELAY * (2 ** attempt) + random.uniform(0, 0.1)
+                    logger.warning(
+                        f"Network error: {e}, retrying in {delay:.2f}s "
+                        f"(attempt {attempt + 1}/{self.MAX_RETRIES})"
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(f"Network error after {self.MAX_RETRIES} attempts: {e}")
+                    raise TodoistError(f"Network error: {str(e)}")
+        
+        # Should not reach here
+        raise TodoistError("Failed after all retry attempts")
+
     async def validate_token(self) -> dict[str, Any]:
         """Validate the API token and return user info.
 
@@ -55,24 +112,20 @@ class TodoistService:
             InvalidTokenError: If token is invalid
             TodoistError: For other API errors
         """
-        try:
-            async with self._get_client() as client:
-                response = await client.get(
-                    f"{self.SYNC_URL}/user",
-                    headers=self.headers,
-                )
+        response = await self._make_request_with_retry(
+            "GET",
+            f"{self.SYNC_URL}/user",
+            headers=self.headers,
+        )
 
-                if response.status_code == 401:
-                    raise InvalidTokenError()
-                elif response.status_code == 403:
-                    raise QuotaExceededError()
-                elif response.status_code != 200:
-                    raise TodoistError(f"API error: {response.status_code}")
+        if response.status_code == 401:
+            raise InvalidTokenError()
+        elif response.status_code == 403:
+            raise QuotaExceededError()
+        elif response.status_code != 200:
+            raise TodoistError(f"API error: {response.status_code}")
 
-                return response.json()
-        except httpx.RequestError as e:
-            logger.error(f"Network error validating token: {e}")
-            raise TodoistError(f"Network error: {str(e)}")
+        return response.json()
 
     async def create_task(
         self,
@@ -141,32 +194,28 @@ class TodoistService:
 
         logger.info(f"Creating task with data: {task_data}")
 
-        try:
-            async with self._get_client() as client:
-                response = await client.post(
-                    f"{self.BASE_URL}/tasks",
-                    headers=self.headers,
-                    json=task_data,
-                )
+        response = await self._make_request_with_retry(
+            "POST",
+            f"{self.BASE_URL}/tasks",
+            headers=self.headers,
+            json=task_data,
+        )
 
-                if response.status_code == 401:
-                    raise InvalidTokenError()
-                elif response.status_code == 403:
-                    raise QuotaExceededError()
-                elif response.status_code == 429:
-                    retry_after = int(response.headers.get("Retry-After", "60"))
-                    raise RateLimitError(retry_after=retry_after)
-                elif response.status_code != 200:
-                    try:
-                        error_data = response.json() if response.content else {"error": "Empty response"}
-                    except Exception:
-                        error_data = {"error": f"Invalid response: {response.text[:100]}"}
-                    raise TodoistError(f"Failed to create task: {error_data}")
+        if response.status_code == 401:
+            raise InvalidTokenError()
+        elif response.status_code == 403:
+            raise QuotaExceededError()
+        elif response.status_code == 429:
+            retry_after = int(response.headers.get("Retry-After", "60"))
+            raise RateLimitError(retry_after=retry_after)
+        elif response.status_code != 200:
+            try:
+                error_data = response.json() if response.content else {"error": "Empty response"}
+            except Exception:
+                error_data = {"error": f"Invalid response: {response.text[:100]}"}
+            raise TodoistError(f"Failed to create task: {error_data}")
 
-                return response.json()
-        except httpx.RequestError as e:
-            logger.error(f"Network error creating task: {e}")
-            raise TodoistError(f"Network error: {str(e)}")
+        return response.json()
 
     async def get_projects(self) -> list[dict[str, Any]]:
         """Get all projects with caching.
@@ -182,26 +231,22 @@ class TodoistService:
 
         await self._rate_limiter.acquire()
 
-        try:
-            async with self._get_client() as client:
-                response = await client.get(
-                    f"{self.BASE_URL}/projects",
-                    headers=self.headers,
-                )
+        response = await self._make_request_with_retry(
+            "GET",
+            f"{self.BASE_URL}/projects",
+            headers=self.headers,
+        )
 
-                if response.status_code == 401:
-                    raise InvalidTokenError()
-                elif response.status_code == 403:
-                    raise QuotaExceededError()
-                elif response.status_code != 200:
-                    raise TodoistError(f"Failed to get projects: {response.status_code}")
+        if response.status_code == 401:
+            raise InvalidTokenError()
+        elif response.status_code == 403:
+            raise QuotaExceededError()
+        elif response.status_code != 200:
+            raise TodoistError(f"Failed to get projects: {response.status_code}")
 
-                self._projects_cache = response.json()
-                self._update_cache_expiry()
-                return self._projects_cache
-        except httpx.RequestError as e:
-            logger.error(f"Network error getting projects: {e}")
-            raise TodoistError(f"Network error: {str(e)}")
+        self._projects_cache = response.json()
+        self._update_cache_expiry()
+        return self._projects_cache
 
     async def get_labels(self) -> list[dict[str, Any]]:
         """Get all labels with caching.
