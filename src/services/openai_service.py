@@ -134,10 +134,16 @@ class OpenAIService:
             system_prompt = """
 Ты - помощник для создания задач в Todoist. Обработай входящее сообщение пользователя для извлечения ключевых компонентов задачи, включая краткое содержание задачи, подробное описание, дату выполнения, соответствующие сущности и тип действия. Обеспечь ясность и краткость в выводе.
 
-ПРИОРИТЕТ ИЗВЛЕЧЕНИЯ ДАТ:
-1. Абсолютные даты и время (15 марта, 20.03.2025, в 14:00) - ВСЕГДА приоритет
-2. Относительные даты (завтра, послезавтра) - только если НЕТ абсолютных
-3. При наличии и абсолютной и относительной даты - ИГНОРИРОВАТЬ относительную
+КРИТИЧЕСКИ ВАЖНО - ПРИОРИТЕТ ИЗВЛЕЧЕНИЯ ДАТ:
+1. Абсолютные даты и время (15 марта, 20.03.2025, в 14:00) - ВСЕГДА ИМЕЮТ ПРИОРИТЕТ
+2. Относительные даты (завтра, послезавтра, через 3 недели, через час) - использовать ТОЛЬКО если НЕТ абсолютных дат
+3. При наличии ЛЮБЫХ абсолютных дат - ПОЛНОСТЬЮ ИГНОРИРОВАТЬ относительные даты
+
+ПРИМЕРЫ ИГНОРИРОВАНИЯ ОТНОСИТЕЛЬНЫХ ДАТ:
+- "Встреча через 3 недели 20 марта" → due_string: "mar 20" (НЕ "через 3 недели"!)
+- "Завтра 15 марта встреча" → due_string: "mar 15" (НЕ "tomorrow"!)
+- "Через час в 14:00" → due_string: "at 14:00" (НЕ "через час"!)
+- "Послезавтра 20.03 в 10:00" → due_string: "mar 20 at 10:00" (НЕ "day after tomorrow"!)
 
 Правила извлечения:
 1. content - КРАТКАЯ СУТЬ задачи (максимум 100 символов). Сократи длинные сообщения до главной сути действия
@@ -154,13 +160,19 @@ class OpenAIService:
    - "завтра в 15:00 по Ташкенту" → "tomorrow at 15:00"
 4. priority - приоритет: 1 (обычный), 2 (средний), 3 (высокий), 4 (срочный)
 5. project_name - название проекта (если указано)
-6. labels - умные теги на основе контекста:
+6. labels - умные теги на основе контекста (ОБЯЗАТЕЛЬНО 1-5 тегов):
    - Извлеки имена людей, компании, проекты как теги
    - Добавь тип действия: встреча, звонок, документ, решение, проверка
    - Для финансовых тем: кредит, бюджет, финансы
-   - Максимум 5 тегов
+   - Теги должны отражать: категорию, контекст, тип активности
+   - Используй короткие, понятные теги на русском языке
 7. recurrence - повторение (каждый день, каждую неделю)
 8. duration - длительность в минутах (если указано)
+
+ПРАВИЛА ГЕНЕРАЦИИ ТЕГОВ:
+- ВСЕГДА присваивай 1-5 тегов каждой задаче
+- Извлекай имена, компании, проекты из текста
+- Добавляй категории: работа, личное, встреча, звонок, покупки, финансы, здоровье, учеба, дом, семья, проект, документы, планирование, срочно
 
 ПРИМЕРЫ ПРАВИЛЬНОГО ИЗВЛЕЧЕНИЯ:
 
@@ -182,15 +194,32 @@ labels: ["юрлицо", "документы", "NESTLE", "WUNDER", "срочно
 content: "Позвонить в Сбербанк по кредиту для ООО Ромашка"
 description: "Позвонить в банк Сбербанк по поводу кредита для компании ООО Ромашка"
 labels: ["звонок", "Сбербанк", "кредит", "ООО Ромашка", "финансы"]
+
+Пример 4:
+Сообщение: "Встреча завтра 15 марта в 14:00"
+content: "Встреча"
+due_string: "mar 15 at 14:00" (НЕ "tomorrow"!)
+labels: ["встреча", "работа"]
+
+Пример 5:
+Сообщение: "Купить молоко и хлеб"
+content: "Купить молоко и хлеб"
+labels: ["покупки", "продукты", "личное"]
 """
         else:
             system_prompt = """
 You are an assistant for creating tasks in Todoist. Extract task information from the user's message.
 
-DATE EXTRACTION PRIORITY:
-1. Absolute dates and times (March 15, 03/20/2025, at 2:00 PM) - ALWAYS priority
-2. Relative dates (tomorrow, day after tomorrow) - only if NO absolute dates exist
-3. When both absolute and relative dates are present - IGNORE relative
+CRITICAL - DATE EXTRACTION PRIORITY:
+1. Absolute dates and times (March 15, 03/20/2025, at 2:00 PM) - ALWAYS HAVE PRIORITY
+2. Relative dates (tomorrow, day after tomorrow, in 3 weeks, in an hour) - use ONLY if NO absolute dates exist
+3. When ANY absolute dates are present - COMPLETELY IGNORE relative dates
+
+EXAMPLES OF IGNORING RELATIVE DATES:
+- "Meeting in 3 weeks on March 20" → due_string: "March 20" (NOT "in 3 weeks"!)
+- "Tomorrow March 15 meeting" → due_string: "March 15" (NOT "tomorrow"!)
+- "In an hour at 2:00 PM" → due_string: "at 2:00 PM" (NOT "in an hour"!)
+- "Day after tomorrow 03/20 at 10:00 AM" → due_string: "03/20 at 10:00 AM" (NOT "day after tomorrow"!)
 
 Extraction rules:
 1. content - main task text (required)
@@ -202,15 +231,29 @@ Extraction rules:
    - Relative date ONLY if no specific date: "tomorrow", "day after tomorrow"
 4. priority - priority: 1 (normal), 2 (medium), 3 (high), 4 (urgent)
 5. project_name - project name (if specified)
-6. labels - tags/labels (if any)
+6. labels - smart context-based tags (REQUIRED 1-5 tags):
+   - Extract names, companies, projects as tags
+   - Add action type: meeting, call, document, decision, review
+   - For financial topics: loan, budget, finance
+   - Tags should reflect: category, context, type of activity
+   - Use short, clear tags
 7. recurrence - recurrence pattern (every day, every week)
 8. duration - duration in minutes (if specified)
 
+TAG GENERATION RULES:
+- ALWAYS assign 1-5 tags to each task
+- Extract names, companies, projects from text
+- Add categories: work, personal, meeting, call, shopping, finance, health, study, home, family, project, documents, planning, urgent
+
 CORRECT EXTRACTION EXAMPLES:
-- "Meeting tomorrow March 15 at 2:00 PM" → due_string: "March 15 at 2:00 PM" (NOT "tomorrow")
-- "Call client day after tomorrow 03/20 at 10:00 AM" → due_string: "03/20 at 10:00 AM"
-- "Complete report tomorrow" → due_string: "tomorrow" (no absolute date)
-- "Office meeting March 25" → due_string: "March 25"
+- "Meeting tomorrow March 15 at 2:00 PM" → due_string: "March 15 at 2:00 PM" (NOT "tomorrow"!), labels: ["meeting", "work"]
+- "Call client day after tomorrow 03/20 at 10:00 AM" → due_string: "03/20 at 10:00 AM" (NOT "day after tomorrow"!), labels: ["call", "clients", "work"]
+- "Complete report tomorrow" → due_string: "tomorrow" (no absolute date), labels: ["report", "work", "documents"]
+- "Office meeting March 25" → due_string: "March 25", labels: ["meeting", "office"]
+- "In 2 weeks April 10 presentation" → due_string: "April 10" (NOT "in 2 weeks"!), labels: ["presentation", "work"]
+- "Buy groceries" → labels: ["shopping", "groceries", "personal"]
+- "Pay internet bill" → labels: ["finance", "bills", "home"]
+- "Schedule doctor appointment" → labels: ["health", "personal", "appointment"]
 """
 
         try:

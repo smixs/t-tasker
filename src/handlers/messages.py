@@ -146,6 +146,11 @@ async def handle_text_message(
                         task.due_string,
                         user_language=user.language_code
                     )
+                    # Remove "до " and "к " prefixes that Todoist doesn't understand
+                    if parsed_due_string.startswith("до "):
+                        parsed_due_string = parsed_due_string[3:]
+                    elif parsed_due_string.startswith("к "):
+                        parsed_due_string = parsed_due_string[2:]
                     logger.info(f"Parsed due_string: '{task.due_string}' -> '{parsed_due_string}'")
 
                 # Create the task
@@ -310,6 +315,11 @@ async def handle_voice_message(message: Message, bot: Bot, user: "User", todoist
                         task.due_string,
                         user_language=user.language_code
                     )
+                    # Remove "до " and "к " prefixes that Todoist doesn't understand
+                    if parsed_due_string.startswith("до "):
+                        parsed_due_string = parsed_due_string[3:]
+                    elif parsed_due_string.startswith("к "):
+                        parsed_due_string = parsed_due_string[2:]
                     logger.info(f"Parsed due_string: '{task.due_string}' -> '{parsed_due_string}'")
 
                 todoist_task = await todoist.create_task(
