@@ -85,11 +85,11 @@ class Settings(BaseSettings):
         description="PostgreSQL database URL"
     )
     database_pool_size: int = Field(
-        default=10,
+        default=50,
         description="Database connection pool size"
     )
     database_max_overflow: int = Field(
-        default=20,
+        default=100,
         description="Database connection pool max overflow"
     )
     database_echo: bool = Field(

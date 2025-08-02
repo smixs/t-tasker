@@ -21,6 +21,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: taskerbot-redis
+    command: redis-server --replica-read-only no --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:

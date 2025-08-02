@@ -8,7 +8,6 @@ import sys
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
 
 from src.core.database import get_database
@@ -18,6 +17,7 @@ from src.core.middleware import (
     RateLimitMiddleware,
     UserContextMiddleware,
 )
+from src.core.redis_storage import RetryRedisStorage
 from src.core.settings import get_settings
 from src.handlers import callback_router, command_router, edit_router, error_router, message_router
 from src.middleware.auth import AuthMiddleware
@@ -53,11 +53,29 @@ class Application:
         # Initialize database
         await self.database.create_tables()
 
-        # Setup Redis
-        self.redis = Redis.from_url(
-            self.settings.redis_url,
-            decode_responses=True
-        )
+        # Setup Redis with retry logic
+        max_retries = 5
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                self.redis = Redis.from_url(
+                    self.settings.redis_url,
+                    decode_responses=True,
+                    retry_on_timeout=True
+                )
+                
+                # Test Redis connection
+                await self.redis.ping()
+                logger.info("Redis connection established successfully")
+                break
+                
+            except Exception as e:
+                logger.error(f"Redis connection attempt {attempt + 1}/{max_retries} failed: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(retry_delay)
+                else:
+                    raise RuntimeError(f"Failed to connect to Redis after {max_retries} attempts: {e}")
 
         # Create bot
         self.bot = Bot(
@@ -65,9 +83,14 @@ class Application:
             default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
 
-        # Create dispatcher with Redis storage
+        # Create dispatcher with custom Redis storage that has retry logic
         self.dispatcher = Dispatcher(
-            storage=RedisStorage(self.redis)
+            storage=RetryRedisStorage(
+                self.redis,
+                max_retries=3,
+                retry_delay=0.5,
+                exponential_backoff=True
+            )
         )
 
         # Register routers (order matters - edit_router must be before message_router)

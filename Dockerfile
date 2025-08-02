@@ -9,32 +9,39 @@ RUN apt-get update && apt-get install -y \
 # Create non-root user
 RUN useradd -m -U appuser
 
-# Set working directory
-WORKDIR /app
-
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
+# Set working directory
+WORKDIR /app
 
-# Install dependencies
-RUN uv sync --frozen --no-dev
-
-# Add cache-busting argument
-ARG CACHEBUST=1
-
-# Copy application code
-COPY src ./src
-
-# Copy assets (images, etc.)
-COPY assets ./assets
-
-# Change ownership
-RUN chown -R appuser:appuser /app
+# Change ownership of the working directory
+RUN chown appuser:appuser /app
 
 # Switch to non-root user
 USER appuser
+
+# Enable bytecode compilation for better startup performance
+ENV UV_COMPILE_BYTECODE=1
+# Use copy mode for Docker (required when using cache mounts)
+ENV UV_LINK_MODE=copy
+
+# Install dependencies in a separate layer with cache mount
+# This significantly speeds up rebuilds when dependencies don't change
+COPY --chown=appuser:appuser pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/home/appuser/.cache/uv,uid=1000,gid=1000 \
+    uv sync --frozen --no-dev --no-install-project
+
+# Add cache-busting argument  
+ARG CACHEBUST=1
+
+# Copy the rest of the project
+COPY --chown=appuser:appuser src ./src
+COPY --chown=appuser:appuser assets ./assets
+
+# Final sync to install the project itself
+RUN --mount=type=cache,target=/home/appuser/.cache/uv,uid=1000,gid=1000 \
+    uv sync --frozen --no-dev
 
 # Run the bot
 CMD ["uv", "run", "python", "-m", "src.main"]

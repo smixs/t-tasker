@@ -52,5 +52,7 @@ testpaths = ["tests"]
 
 [dependency-groups]
 dev = [
+    "numpy>=2.3.1",
+    "psutil>=7.0.0",
     "pytest-cov==6.0.0",
 ]

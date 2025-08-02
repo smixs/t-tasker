@@ -8,6 +8,7 @@ from typing import Any
 
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
+from redis.exceptions import RedisError, ReadOnlyError, ConnectionError as RedisConnectionError
 
 from src.core.exceptions import BotError
 
@@ -92,6 +93,30 @@ class ErrorHandlingMiddleware(BaseMiddleware):
                 await event.answer(f"❌ {e.user_message}")
             elif isinstance(event, CallbackQuery):
                 await event.answer(f"❌ {e.user_message}", show_alert=True)
+        except ReadOnlyError as e:
+            # Handle Redis read-only error
+            logger.error(f"Redis read-only error: {e}")
+            error_msg = "⚠️ Временная проблема с сервисом. Пожалуйста, попробуйте через несколько секунд."
+            if isinstance(event, Message):
+                await event.answer(error_msg)
+            elif isinstance(event, CallbackQuery):
+                await event.answer(error_msg, show_alert=True)
+        except RedisConnectionError as e:
+            # Handle Redis connection error
+            logger.error(f"Redis connection error: {e}")
+            error_msg = "⚠️ Проблема с подключением к сервису. Пожалуйста, попробуйте позже."
+            if isinstance(event, Message):
+                await event.answer(error_msg)
+            elif isinstance(event, CallbackQuery):
+                await event.answer(error_msg, show_alert=True)
+        except RedisError as e:
+            # Handle general Redis errors
+            logger.error(f"Redis error: {e}")
+            error_msg = "⚠️ Временная техническая проблема. Пожалуйста, попробуйте позже."
+            if isinstance(event, Message):
+                await event.answer(error_msg)
+            elif isinstance(event, CallbackQuery):
+                await event.answer(error_msg, show_alert=True)
         except Exception as e:
             # Log unexpected error
             request_id = data.get("request_id", "unknown")
