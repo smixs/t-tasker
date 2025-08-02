@@ -10,6 +10,7 @@ from aiogram.types import Message
 
 from src.core.exceptions import BotError, TranscriptionError
 from src.handlers.states import EditTaskStates
+from src.models.db import User
 from src.services.deepgram_service import DeepgramService
 from src.services.openai_service import OpenAIService
 from src.services.todoist_service import TodoistService
@@ -111,12 +112,16 @@ async def handle_due_date_edit(message: Message, state: FSMContext) -> None:
     await process_due_date_edit(message.text, state, message)
 
 
-@edit_router.message(F.voice | F.video_note | F.video, StateFilter(EditTaskStates.editing_content, EditTaskStates.editing_due_date))
-async def handle_voice_in_edit_mode(message: Message, state: FSMContext, bot: Bot) -> None:
+@edit_router.message(
+    F.voice | F.video_note | F.video, StateFilter(EditTaskStates.editing_content, EditTaskStates.editing_due_date)
+)
+async def handle_voice_in_edit_mode(
+    message: Message, state: FSMContext, bot: Bot, user: "User", todoist_token: str
+) -> None:
     """Handle voice/video messages in any edit state - transcribe and process as text."""
     # Get current state to determine which field we're editing
     current_state = await state.get_state()
-    
+
     try:
         # Determine file type and download
         if message.voice:
@@ -134,23 +139,23 @@ async def handle_voice_in_edit_mode(message: Message, state: FSMContext, bot: Bo
             # This shouldn't happen with our filter
             logger.error("Unexpected message type in voice handler")
             return
-        
+
         # Download voice file
         voice_file = await bot.get_file(file_id)
+        if not voice_file.file_path:
+            logger.error("Voice file has no file_path")
+            await message.answer("❌ Ошибка при загрузке голосового сообщения")
+            return
         voice_buffer = BytesIO()
         await bot.download_file(voice_file.file_path, voice_buffer)
         voice_buffer.seek(0)
 
         # Send typing action
-        await message.chat.do("typing")
+        await bot.send_chat_action(message.chat.id, "typing")
 
         # Transcribe audio
         deepgram_service = DeepgramService()
-        transcript = await deepgram_service.transcribe_audio(
-            audio_data=voice_buffer.getvalue(),
-            mime_type=mime_type,
-            filename="voice.ogg"
-        )
+        transcript = await deepgram_service.transcribe(audio_bytes=voice_buffer.getvalue(), mime_type=mime_type)
 
         if not transcript:
             await message.answer("❌ Не удалось распознать голосовое сообщение")

@@ -217,7 +217,7 @@ CORRECT EXTRACTION EXAMPLES:
             # Create messages
             messages: list[ChatCompletionMessageParam] = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": filtered_message},
+                {"role": "user", "content": message},
             ]
 
             # Use instructor to get structured output
@@ -358,7 +358,7 @@ IMPORTANT: When in doubt between creation and command, choose task creation.
             # Create messages
             messages: list[ChatCompletionMessageParam] = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": filtered_message},
+                {"role": "user", "content": message},
             ]
 
             # Use instructor to get structured output
