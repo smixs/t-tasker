@@ -8,6 +8,7 @@ import sys
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
 from redis.asyncio import Redis
 
 from src.core.database import get_database
@@ -53,10 +54,11 @@ class Application:
         # Initialize database
         await self.database.create_tables()
 
-        # Setup Redis with retry logic
-        max_retries = 5
-        retry_delay = 2
-        
+        # Setup Redis with retry logic (optional - fallback to MemoryStorage)
+        storage = None
+        max_retries = 3
+        retry_delay = 1
+
         for attempt in range(max_retries):
             try:
                 self.redis = Redis.from_url(
@@ -64,18 +66,25 @@ class Application:
                     decode_responses=True,
                     retry_on_timeout=True
                 )
-                
+
                 # Test Redis connection
                 await self.redis.ping()
                 logger.info("Redis connection established successfully")
+                storage = RetryRedisStorage(
+                    self.redis,
+                    max_retries=3,
+                    retry_delay=0.5,
+                    exponential_backoff=True
+                )
                 break
-                
+
             except Exception as e:
-                logger.error(f"Redis connection attempt {attempt + 1}/{max_retries} failed: {e}")
+                logger.warning(f"Redis connection attempt {attempt + 1}/{max_retries} failed: {e}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(retry_delay)
                 else:
-                    raise RuntimeError(f"Failed to connect to Redis after {max_retries} attempts: {e}")
+                    logger.error(f"Failed to connect to Redis after {max_retries} attempts. Using MemoryStorage as fallback.")
+                    storage = MemoryStorage()
 
         # Create bot
         self.bot = Bot(
@@ -83,15 +92,8 @@ class Application:
             default=DefaultBotProperties(parse_mode=ParseMode.HTML)
         )
 
-        # Create dispatcher with custom Redis storage that has retry logic
-        self.dispatcher = Dispatcher(
-            storage=RetryRedisStorage(
-                self.redis,
-                max_retries=3,
-                retry_delay=0.5,
-                exponential_backoff=True
-            )
-        )
+        # Create dispatcher with storage (Redis or Memory)
+        self.dispatcher = Dispatcher(storage=storage)
 
         # Register routers (order matters - edit_router must be before message_router)
         self.dispatcher.include_router(error_router)
